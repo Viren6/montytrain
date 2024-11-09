@@ -90,12 +90,13 @@ fn network(size: usize) -> Graph {
     let l0w = builder.create_weights("l0w", Shape::new(size, inputs::INPUT_SIZE));
     let l0b = builder.create_weights("l0b", Shape::new(size, 1));
 
-    let l1w = builder.create_weights("l1w", Shape::new(moves::NUM_MOVES, size));
+    let l1w = builder.create_weights("l1w", Shape::new(moves::NUM_MOVES, size / 2));
     let l1b = builder.create_weights("l1b", Shape::new(moves::NUM_MOVES, 1));
 
     let l1 = operations::affine(&mut builder, l0w, inputs, l0b);
-    let l1a = operations::activate(&mut builder, l1, Activation::SCReLU);
-    let l2 = operations::affine(&mut builder, l1w, l1a, l1b);
+    let l1a = operations::activate(&mut builder, l1, Activation::CReLU);
+    let l1r = operations::pairwise_mul(&mut builder, l1a);
+    let l2 = operations::affine(&mut builder, l1w, l1r, l1b);
 
     operations::sparse_softmax_crossentropy_loss_masked(&mut builder, mask, l2, dist);
 
