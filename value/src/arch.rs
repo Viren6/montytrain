@@ -54,7 +54,7 @@ fn build_network(inputs: usize, l1: usize) -> (Graph, Node) {
 
     // inference
     let l1 = operations::affine(&mut builder, l0w, stm, l0b);
-    let l1 = operations::activate(&mut builder, l1, Activation::CReLU);
+    let l1 = operations::activate(&mut builder, l1, Activation::SCReLU);
 
     let predicted = operations::affine(&mut builder, l1w, l1, l1b);
     operations::softmax_crossentropy_loss(&mut builder, predicted, targets);
