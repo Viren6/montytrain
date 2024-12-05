@@ -1,14 +1,12 @@
 use bullet::{
-    inputs::InputType,
+    inputs,
     operations,
     optimiser::{AdamWOptimiser, AdamWParams},
     outputs, Activation, ExecutionContext, Graph, GraphBuilder, Node, QuantTarget, Shape, Trainer,
 };
 
-use crate::input::ThreatInputs;
-
-pub fn make_trainer(l1: usize) -> Trainer<AdamWOptimiser, ThreatInputs, outputs::Single> {
-    let num_inputs = ThreatInputs.size();
+pub fn make_trainer(l1: usize) -> Trainer<AdamWOptimiser, inputs::Chess768, outputs::Single> {
+    let num_inputs = 768;
 
     let (mut graph, output_node) = build_network(num_inputs, l1);
 
@@ -28,7 +26,7 @@ pub fn make_trainer(l1: usize) -> Trainer<AdamWOptimiser, ThreatInputs, outputs:
         graph,
         output_node,
         AdamWParams::default(),
-        ThreatInputs,
+        inputs::Chess768,
         outputs::Single,
         vec![
             ("l0w".to_string(), QuantTarget::Float),
