@@ -1,14 +1,12 @@
 use bullet::default::formats::montyformat::chess::{Attacks, Move, Piece, Position, Side};
 
 pub const MAX_MOVES: usize = 96;
-pub const NUM_MOVES: usize = 2 * (OFFSETS[64] + PROMOS);
+pub const NUM_MOVES: usize = (OFFSETS[64] + PROMOS);
 pub const PROMOS: usize = 4 * 22;
 
 pub fn map_move_to_index(pos: &Position, mov: Move) -> usize {
     let hm = if pos.king_index() % 8 > 3 { 7 } else { 0 };
-    let good_see = (OFFSETS[64] + PROMOS) * usize::from(see(pos, &mov, -108));
-
-    let idx = if mov.is_promo() {
+    if mov.is_promo() {
         let ffile = (mov.src() ^ hm) % 8;
         let tfile = (mov.to() ^ hm) % 8;
         let promo_id = 2 * ffile + tfile;
@@ -22,9 +20,7 @@ pub fn map_move_to_index(pos: &Position, mov: Move) -> usize {
         let below = ALL_DESTINATIONS[from] & ((1 << dest) - 1);
 
         OFFSETS[from] + below.count_ones() as usize
-    };
-
-    good_see + idx
+    }
 }
 
 macro_rules! init {
