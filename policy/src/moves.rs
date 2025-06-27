@@ -114,69 +114,125 @@ fn gain(pos: &Position, mov: &Move) -> i32 {
     score
 }
 
-#[allow(unused)]
 fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
     let sq = usize::from(mov.to());
     assert!(sq < 64, "wha");
-    let mut next = if mov.is_promo() {
+
+    /* ---------------------------------------------------------------
+     *  Pre-move legality checks (king safety, en-passant)
+     * ------------------------------------------------------------- */
+    let side = pos.stm();               // 0 = white, 1 = black
+
+    // King squares for both colours
+    let mut king_sq = [
+        pos.king_sq(Side::WHITE),
+        pos.king_sq(Side::BLACK),
+    ];
+
+    // Piece that makes the initial capture
+    let moved = if mov.is_promo() {
         mov.promo_pc()
     } else {
         pos.get_pc(1 << mov.src())
     };
+
+    // Occupancy after applying the capture
+    let mut occ =
+        (pos.piece(Side::WHITE) | pos.piece(Side::BLACK)) ^ (1 << mov.src()) ^ (1 << sq);
+    if mov.is_en_passant() {
+        occ ^= 1 << (sq ^ 8);           // remove the e.p. victim
+    }
+    occ |= 1 << sq;                     // our piece now sits on the target square
+
+    // Update king square if our king moved
+    if moved == Piece::KING {
+        king_sq[side] = sq;
+    }
+
+    // Illegal if our own king is in check after the move
+    if pos.is_square_attacked(king_sq[side], side, occ) {
+        return false;
+    }
+
+    /* ---------------------------------------------------------------
+     *  Static-exchange evaluation - fully legal
+     * ------------------------------------------------------------- */
+    let mut next  = moved;
     let mut score = gain(pos, mov) - threshold - SEE_VALS[next];
 
     if score >= 0 {
-        return true;
-    }
-
-    let mut occ = (pos.piece(Side::WHITE) | pos.piece(Side::BLACK)) ^ (1 << mov.src()) ^ (1 << sq);
-    if mov.is_en_passant() {
-        occ ^= 1 << (sq ^ 8);
+        return true;                    // immediate profit or break-even
     }
 
     let bishops = pos.piece(Piece::BISHOP) | pos.piece(Piece::QUEEN);
-    let rooks = pos.piece(Piece::ROOK) | pos.piece(Piece::QUEEN);
-    let mut us = pos.stm() ^ 1;
+    let rooks   = pos.piece(Piece::ROOK)   | pos.piece(Piece::QUEEN);
+
+    let mut us = side ^ 1;              // side to move after our capture
+
     let mut attackers = (Attacks::knight(sq) & pos.piece(Piece::KNIGHT))
-        | (Attacks::king(sq) & pos.piece(Piece::KING))
+        | (Attacks::king(sq)   & pos.piece(Piece::KING))
         | (Attacks::pawn(sq, Side::WHITE) & pos.piece(Piece::PAWN) & pos.piece(Side::BLACK))
         | (Attacks::pawn(sq, Side::BLACK) & pos.piece(Piece::PAWN) & pos.piece(Side::WHITE))
-        | (Attacks::rook(sq, occ) & rooks)
+        | (Attacks::rook(sq,   occ) & rooks)
         | (Attacks::bishop(sq, occ) & bishops);
 
     loop {
         let our_attackers = attackers & pos.piece(us);
         if our_attackers == 0 {
-            break;
+            break;                      // no more recaptures
         }
 
+        /* ---- pick the least-valuable *legal* attacker ---- */
+        let mut chosen = 0u64;
         for pc in Piece::PAWN..=Piece::KING {
-            let board = our_attackers & pos.piece(pc);
-            if board > 0 {
-                occ ^= board & board.wrapping_neg();
-                next = pc;
-                break;
+            let mut bb_pc = our_attackers & pos.piece(pc);
+            while bb_pc > 0 {
+                let from = bb_pc.trailing_zeros() as usize;
+                let bit  = 1u64 << from;
+
+                // Occupancy after this recapture
+                let mut occ_after = (occ ^ bit) | (1 << sq);
+
+                // King square for this side if its king moves
+                let ksq = if pc == Piece::KING { sq } else { king_sq[us] };
+
+                // Only accept attacker if its king remains safe
+                if !pos.is_square_attacked(ksq, us, occ_after) {
+                    chosen = bit;
+                    next   = pc;
+                    occ    = occ_after;
+                    if pc == Piece::KING {
+                        king_sq[us] = sq;
+                    }
+                    break;
+                }
+                bb_pc &= bb_pc - 1;      // try next attacker of same type
+            }
+            if chosen != 0 {
+                break;                  // we found a legal recapture
             }
         }
 
-        if [Piece::PAWN, Piece::BISHOP, Piece::QUEEN].contains(&next) {
-            attackers |= Attacks::bishop(sq, occ) & bishops;
-        }
-        if [Piece::ROOK, Piece::QUEEN].contains(&next) {
-            attackers |= Attacks::rook(sq, occ) & rooks;
+        if chosen == 0 {
+            break;                      // no legal recapture exists
         }
 
+        // Newly revealed x-ray attacks
+        attackers |= Attacks::bishop(sq, occ) & bishops;
+        attackers |= Attacks::rook(sq,   occ) & rooks;
         attackers &= occ;
+
         score = -score - 1 - SEE_VALS[next];
-        us ^= 1;
+        us   ^= 1;                      // change side
 
         if score >= 0 {
             if next == Piece::KING && attackers & pos.piece(us) > 0 {
-                us ^= 1;
+                us ^= 1;                // special: side still has the move
             }
             break;
         }
     }
 
+    // SEE is true when the original side comes out ahead
     pos.stm() != us
 }
