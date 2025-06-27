@@ -112,9 +112,24 @@ fn network(size: usize) -> Graph {
     let l0 = builder.new_affine("l0", inputs::INPUT_SIZE, size);
     let l1 = builder.new_affine("l1", size / 2, moves::NUM_MOVES);
 
-    let mut out = l0.forward(inputs).activate(Activation::CReLU);
-    out = out.pairwise_mul();
-    out = l1.forward(out);
+    // branch layers
+    let l2 = builder.new_affine("l2", size / 64, 256);                      // 192 → 256
+    let l3 = builder.new_affine("l3", 256, moves::NUM_MOVES);               // 256 → 1 880
+
+    let mut trunk = l0.forward(inputs).activate(Activation::CReLU);
+    trunk = trunk.pairwise_mul();                                           // 12 288 → **6 144**
+
+    // -- main path (unchanged)
+    let main = l1.forward(trunk.clone());                                   // 6 144 → 1 880
+
+    // -- secondary path
+    let mut branch = trunk;
+    for _ in 0..5 { branch = branch.pairwise_mul(); }                       // 6 144 → **192**
+    branch = l2.forward(branch).activate(Activation::CReLU);                // 192 → 256
+    branch = l3.forward(branch);                                            // 256 → 1 880
+
+    // combine paths and apply loss
+    let out = main.add(branch);                                             // element-wise sum
     out.masked_softmax_crossentropy_loss(dist, mask);
 
     builder.build(ExecutionContext::default())
