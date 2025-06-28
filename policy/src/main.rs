@@ -8,6 +8,7 @@ use bullet::{
     nn::{
         optimiser::{AdamWParams, Optimiser},
         Activation, ExecutionContext, Graph, NetworkBuilder, Shape,
+        InitSettings, 
     },
     trainer::{
         logger,
@@ -104,32 +105,67 @@ fn main() {
 
 fn network(size: usize) -> Graph {
     let builder = NetworkBuilder::default();
+    let b = &builder;
 
-    let inputs = builder.new_sparse_input("inputs", Shape::new(inputs::INPUT_SIZE, 1), inputs::MAX_ACTIVE);
-    let mask = builder.new_sparse_input("mask", Shape::new(moves::NUM_MOVES, 1), moves::MAX_MOVES);
-    let dist = builder.new_dense_input("dist", Shape::new(moves::MAX_MOVES, 1));
+    let inputs = b.new_sparse_input("inputs", Shape::new(inputs::INPUT_SIZE, 1), inputs::MAX_ACTIVE);
+    let mask = b.new_sparse_input("mask", Shape::new(moves::NUM_MOVES, 1), moves::MAX_MOVES);
+    let dist = b.new_dense_input("dist", Shape::new(moves::MAX_MOVES, 1));
+
+    let see_idx = b.new_sparse_input(              // indices of legal moves
+        "see_idx", Shape::new(moves::NUM_MOVES, 1), moves::MAX_MOVES);
+
+    let see_val = b.new_dense_input(               // raw SEE scores
+        "see_val", Shape::new(moves::MAX_MOVES, 1));
+
+    /* ---------- global learnable scale  (starts at 0.002) ---------- */
+    let alpha = b.new_weights(
+        "see_alpha",
+        Shape::new(1, 1),
+        InitSettings::Uniform { mean: 0.002, stdev: 0.0 },
+    );
+
+    /* ---------- tanh( SEE ) and scatter into 1 880-vector -------- */
+
+    // multiply the 96-long value vector by the scalar 
+    let scaled = see_val * alpha;    
+
+    // tanh via 2sigmoid(2x)-1 because Bullet has no built-in Tanh
+    let tanh_vals = scaled
+                        .mul_scalar(2.0)         
+                        .activate(Activation::Sigmoid)  
+                        .mul_scalar(2.0)              
+                        .add_scalar(-1.0);              
+
+    // scatter the 96 values into a dense 1 880-vector
+    let see_vec = tanh_vals.scatter(see_idx);            
+    /* --------------------------------------------------------------- */
 
     let l0 = builder.new_affine("l0", inputs::INPUT_SIZE, size);
     let l1 = builder.new_affine("l1", size / 2, moves::NUM_MOVES);
 
     // branch layers
-    let l2 = builder.new_affine("l2", size / 64, 256);                      // 192 → 256
-    let l3 = builder.new_affine("l3", 256, moves::NUM_MOVES);               // 256 → 1 880
+    let l3 = builder.new_affine("l3", 256, moves::NUM_MOVES);               // 256  1 880
 
     let mut trunk = l0.forward(inputs).activate(Activation::CReLU);
-    trunk = trunk.pairwise_mul();                                           // 12 288 → **6 144**
+    trunk = trunk.pairwise_mul();                                           // 12 288  **6 144**
 
     // -- main path (unchanged)
-    let main = l1.forward(trunk.clone());                                   // 6 144 → 1 880
+    let main = l1.forward(trunk.clone());                                   // 6 144  1 880
 
     // -- secondary path
     let mut branch = trunk;
-    for _ in 0..5 { branch = branch.pairwise_mul(); }                       // 6 144 → **192**
-    branch = l2.forward(branch).activate(Activation::CReLU);                // 192 → 256
-    branch = l3.forward(branch);                                            // 256 → 1 880
+    for _ in 0..5 { branch = branch.pairwise_mul(); }                       // 6 144  **192**
+
+    branch = branch.concat(see_vec);                   // 192 + 1 880 = **2 072**
+
+    let l2_in = (size / 64) + moves::NUM_MOVES;           // 192 + 1 880
+    let l2    = builder.new_affine("l2", l2_in, 256);     // 2 072  256
+
+    branch = l2.forward(branch).activate(Activation::CReLU);                // 2072  256
+    branch = l3.forward(branch);                                            // 256  1 880
 
     // combine paths and apply loss
-    let out = main.add(branch);                                             // element-wise sum
+    let out = main + branch;                                             // element-wise sum
     out.masked_softmax_crossentropy_loss(dist, mask);
 
     builder.build(ExecutionContext::default())

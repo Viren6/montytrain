@@ -1,7 +1,7 @@
 use bullet::default::formats::montyformat::chess::{Attacks, Move, Piece, Position, Side};
 
 pub const MAX_MOVES: usize = 96;
-pub const NUM_MOVES: usize = (OFFSETS[64] + PROMOS);
+pub const NUM_MOVES: usize = OFFSETS[64] + PROMOS;
 pub const PROMOS: usize = 4 * 22;
 
 pub fn map_move_to_index(pos: &Position, mov: Move) -> usize {
@@ -110,7 +110,7 @@ fn gain(pos: &Position, mov: &Move) -> i32 {
     score
 }
 
-fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
+pub fn see(pos: &Position, mov: &Move) -> i32 {
     let sq = usize::from(mov.to());
     assert!(sq < 64, "wha");
 
@@ -145,20 +145,11 @@ fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
         king_sq[side] = sq;
     }
 
-    // Illegal if our own king is in check after the move
-    if pos.is_square_attacked(king_sq[side], side, occ) {
-        return false;
-    }
-
     /* ---------------------------------------------------------------
      *  Static-exchange evaluation - fully legal
      * ------------------------------------------------------------- */
     let mut next  = moved;
-    let mut score = gain(pos, mov) - threshold - SEE_VALS[next];
-
-    if score >= 0 {
-        return true;                    // immediate profit or break-even
-    }
+    let mut score = gain(pos, mov) - SEE_VALS[next];
 
     let bishops = pos.piece(Piece::BISHOP) | pos.piece(Piece::QUEEN);
     let rooks   = pos.piece(Piece::ROOK)   | pos.piece(Piece::QUEEN);
@@ -187,7 +178,7 @@ fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
                 let bit  = 1u64 << from;
 
                 // Occupancy after this recapture
-                let mut occ_after = (occ ^ bit) | (1 << sq);
+                let occ_after = (occ ^ bit) | (1 << sq);
 
                 // King square for this side if its king moves
                 let ksq = if pc == Piece::KING { sq } else { king_sq[us] };
@@ -230,5 +221,5 @@ fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
     }
 
     // SEE is true when the original side comes out ahead
-    pos.stm() != us
+    if pos.stm() == us { -score } else { score }
 }
