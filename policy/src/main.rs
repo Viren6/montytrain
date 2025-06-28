@@ -114,50 +114,54 @@ fn network(size: usize) -> Graph {
     let mask = b.new_sparse_input("mask", Shape::new(moves::NUM_MOVES, 1), moves::MAX_MOVES);
     let dist = b.new_dense_input("dist", Shape::new(moves::MAX_MOVES, 1));
 
-    let see_val = b.new_dense_input(
-        // raw SEE scores per move
+    /* ---------- raw SEE scores per move (column) ---------- *
+    * later code needs (NUM_MOVES, 1)                       */
+    let see_val_col = b.new_dense_input(
         "see_val",
         Shape::new(moves::NUM_MOVES, 1),
     );
 
-    /* ---------- global learnable scale  (starts at 0.002) ---------- */
+    /* ---------- create a ROW view for safe scalar-left math ---------- *
+    * (1, NUM_MOVES) is still a single-batch tensor in Bullet          */
+    let see_val = see_val_col.reshape(Shape::new(1, moves::NUM_MOVES));
+
+    /* ---------- learnable & constant scalars (all 1 x 1) ---------- */
     let alpha = b.new_weights(
         "see_alpha",
         Shape::new(1, 1),
-        InitSettings::Normal {
-            mean: 0.002,
-            stdev: 0.0,
-        },
+        InitSettings::Normal { mean: 0.002, stdev: 0.0 },
     );
-
-    /* ---------- apply tanh to SEE values -------- */
-
-    // scaled = see_val * alpha
-    let scaled = see_val.matmul(alpha);
-
-    // tanh via 2sigmoid(2x)-1 because Bullet has no built-in Tanh
     let two = b.new_weights(
         "see_two",
         Shape::new(1, 1),
-        InitSettings::Normal {
-            mean: 2.0,
-            stdev: 0.0,
-        },
-    );
-    let neg_one = b.new_weights(
-        "see_neg_one",
-        Shape::new(moves::NUM_MOVES, 1),
-        InitSettings::Normal {
-            mean: -1.0,
-            stdev: 0.0,
-        },
+        InitSettings::Normal { mean: 2.0, stdev: 0.0 },
     );
 
-    let tanh_vals = scaled
-        .matmul(two)                  // 2x
-        .activate(Activation::Sigmoid)
-        .matmul(two)                  // 2sigmoid(2x)
-        + neg_one; // -1
+    /* ---------- row vector of -1s to finish tanh(x) = 2a(2x) - 1 ---------- */
+    let neg_one = b.new_weights(
+        "see_neg_one",
+        Shape::new(1, moves::NUM_MOVES),
+        InitSettings::Normal { mean: -1.0, stdev: 0.0 },
+    );
+
+    /* ---------- 1.  a x SEE  (1x1  x  1xN = 1xN) ---------- */
+    let scaled   = alpha.matmul(see_val);
+
+    /* ---------- 2.  2x      ---------- */
+    let two_x    = two.matmul(scaled);
+
+    /* ---------- 3.  a(2x)   ---------- */
+    let sig      = two_x.activate(Activation::Sigmoid);
+
+    /* ---------- 4.  2a(2x) ---------- */
+    let two_sig  = two.matmul(sig);
+
+    /* ---------- 5.  tanh(x) = 2a(2x) - 1  ---------- */
+    let tanh_row = two_sig + neg_one;                 // shape: (1, NUM_MOVES)
+
+    /* ---------- 6.  reshape back to column for downstream code ---------- */
+    let tanh_vals = tanh_row.reshape(Shape::new(moves::NUM_MOVES, 1));  // (NUM_MOVES,1)
+
 
     let see_vec = tanh_vals;
     /* --------------------------------------------------------------- */
