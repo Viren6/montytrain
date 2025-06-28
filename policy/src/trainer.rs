@@ -48,6 +48,12 @@ impl NetworkTrainer for Trainer {
             .load_dense_from_slice(Some(batch_size), &dist.value)
             .unwrap();
 
+        let see_vals = &prepared.see_vals;
+        graph
+            .get_input_mut("see_val")
+            .load_dense_from_slice(Some(batch_size), &see_vals.value)
+            .unwrap();
+
         batch_size
     }
 }

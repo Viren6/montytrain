@@ -60,8 +60,7 @@ pub struct PreparedData {
     pub inputs: SparseInput,
     pub mask: SparseInput,
     pub dist: DenseInput,
-    pub see_idx: SparseInput,   // ≤96 indices per position
-    pub see_val: DenseInput,    // ≤96 matching values
+    pub see_vals: DenseInput, // 1 880-length SEE vector
 }
 
 impl PreparedData {
@@ -82,32 +81,28 @@ impl PreparedData {
             dist: DenseInput {
                 value: vec![0.0; MAX_MOVES * batch_size],
             },
-            see_idx: SparseInput {
-                max_active: MAX_MOVES,
-                value: vec![0; MAX_MOVES * batch_size],
+            see_vals: DenseInput {
+                value: vec![0.0; NUM_MOVES * batch_size],
             },
-            see_val: DenseInput {
-                value: vec![0.0; MAX_MOVES * batch_size],
-        },
         };
 
         std::thread::scope(|s| {
-            for (((((data_chunk, input_chunk), mask_chunk), dist_chunk),
-                  see_idx_chunk), see_val_chunk) in data
+            for ((((data_chunk, input_chunk), mask_chunk), dist_chunk), see_chunk) in data
                 .chunks(chunk_size)
                 .zip(prep.inputs.value.chunks_mut(MAX_ACTIVE * chunk_size))
                 .zip(prep.mask.value.chunks_mut(MAX_MOVES * chunk_size))
                 .zip(prep.dist.value.chunks_mut(MAX_MOVES * chunk_size))
-                .zip(prep.see_idx.value .chunks_mut(MAX_MOVES * chunk_size))
-                .zip(prep.see_val.value .chunks_mut(MAX_MOVES * chunk_size))
+                .zip(prep.see_vals.value.chunks_mut(NUM_MOVES * chunk_size))
             {
                 s.spawn(move || {
                     for (i, point) in data_chunk.iter().enumerate() {
                         let input_offset = MAX_ACTIVE * i;
                         let mask_offset = MAX_MOVES * i;
                         let dist_offset = MAX_MOVES * i;
-                        let see_off_idx = MAX_MOVES * i;
-                        let see_off_val = MAX_MOVES * i;
+                        let see_off = NUM_MOVES * i;
+
+                        // reset SEE vector for this position
+                        see_chunk[see_off..see_off + NUM_MOVES].fill(0.0);
 
                         let mut j = 0;
                         map_policy_inputs(&point.pos, |feat| {
@@ -135,17 +130,13 @@ impl PreparedData {
 
                             mask_chunk[mask_offset + distinct] = idx as i32;
                             dist_chunk[dist_offset + distinct] = f32::from(visits);
-
-                            see_idx_chunk[see_off_idx + distinct] = idx as i32;
-                            see_val_chunk[see_off_val + distinct] =
-                                see(&point.pos, &Move::from(mov)) as f32;
+                            see_chunk[see_off + idx] = see(&point.pos, &Move::from(mov)) as f32;
 
                             distinct += 1;
                         }
 
                         if distinct < MAX_MOVES {
                             mask_chunk[mask_offset + distinct] = -1;
-                            see_idx_chunk[see_off_idx + distinct] = -1;
                         }
 
                         let total = f32::from(total);
