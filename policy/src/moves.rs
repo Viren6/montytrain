@@ -115,124 +115,119 @@ fn gain(pos: &Position, mov: &Move) -> i32 {
 }
 
 fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
-    let sq = usize::from(mov.to());
-    assert!(sq < 64, "wha");
+    let from_sq = usize::from(mov.src());
+    let to_sq = usize::from(mov.to());
+    let side = pos.stm();
 
-    /* ---------------------------------------------------------------
-     *  Pre-move legality checks (king safety, en-passant)
-     * ------------------------------------------------------------- */
-    let side = pos.stm();               // 0 = white, 1 = black
-
-    // King squares for both colours
-    let mut king_sq = [
-        pos.king_sq(Side::WHITE),
-        pos.king_sq(Side::BLACK),
-    ];
-
-    // Piece that makes the initial capture
-    let moved = if mov.is_promo() {
+    // The piece that makes the initial move.
+    let moved_pc = if mov.is_promo() {
         mov.promo_pc()
     } else {
-        pos.get_pc(1 << mov.src())
+        pos.get_pc(1 << from_sq)
     };
 
-    // Occupancy after applying the capture
-    let mut occ =
-        (pos.piece(Side::WHITE) | pos.piece(Side::BLACK)) ^ (1 << mov.src()) ^ (1 << sq);
-    if mov.is_en_passant() {
-        occ ^= 1 << (sq ^ 8);           // remove the e.p. victim
-    }
-    occ |= 1 << sq;                     // our piece now sits on the target square
+    // --- Start of rewritten logic ---
 
-    // Update king square if our king moved
-    if moved == Piece::KING {
-        king_sq[side] = sq;
-    }
-
-    // Illegal if our own king is in check after the move
-    if pos.is_square_attacked(king_sq[side], side, occ) {
+    // 1. Calculate initial gain and check against the threshold.
+    // This is the best-case scenario for the moving side.
+    let mut gain = gain(pos, mov);
+    if gain < threshold {
         return false;
     }
 
-    /* ---------------------------------------------------------------
-     *  Static-exchange evaluation - fully legal
-     * ------------------------------------------------------------- */
-    let mut next  = moved;
-    let mut score = gain(pos, mov) - threshold - SEE_VALS[next];
-
-    if score >= 0 {
-        return true;                    // immediate profit or break-even
+    // 2. Setup the board state for the exchange sequence.
+    let mut occ = pos.occ() ^ (1 << from_sq) ^ (1 << to_sq);
+    if mov.is_en_passant() {
+        occ ^= 1 << (to_sq ^ 8);
     }
 
+    let mut king_sq = [pos.king_sq(Side::WHITE), pos.king_sq(Side::BLACK)];
+    if moved_pc == Piece::KING {
+        king_sq[side] = to_sq;
+    }
+
+    // After the initial move, the piece on the square is `moved_pc`.
+    // Its value is what the opponent can win next.
+    let mut captured_val = SEE_VALS[moved_pc];
+    let mut current_side = side ^ 1;
+
+    // 3. Find all potential attackers to the square.
     let bishops = pos.piece(Piece::BISHOP) | pos.piece(Piece::QUEEN);
-    let rooks   = pos.piece(Piece::ROOK)   | pos.piece(Piece::QUEEN);
-
-    let mut us = side ^ 1;              // side to move after our capture
-
-    let mut attackers = (Attacks::knight(sq) & pos.piece(Piece::KNIGHT))
-        | (Attacks::king(sq)   & pos.piece(Piece::KING))
-        | (Attacks::pawn(sq, Side::WHITE) & pos.piece(Piece::PAWN) & pos.piece(Side::BLACK))
-        | (Attacks::pawn(sq, Side::BLACK) & pos.piece(Piece::PAWN) & pos.piece(Side::WHITE))
-        | (Attacks::rook(sq,   occ) & rooks)
-        | (Attacks::bishop(sq, occ) & bishops);
+    let rooks = pos.piece(Piece::ROOK) | pos.piece(Piece::QUEEN);
+    let mut attackers = (Attacks::knight(to_sq) & pos.piece(Piece::KNIGHT))
+        | (Attacks::king(to_sq) & pos.piece(Piece::KING))
+        | (Attacks::pawn(to_sq, Side::WHITE) & pos.piece(Piece::PAWN) & pos.piece(Side::BLACK))
+        | (Attacks::pawn(to_sq, Side::BLACK) & pos.piece(Piece::PAWN) & pos.piece(Side::WHITE))
+        | (Attacks::rook(to_sq, occ) & rooks)
+        | (Attacks::bishop(to_sq, occ) & bishops);
 
     loop {
-        let our_attackers = attackers & pos.piece(us);
+        // 4. Check if the current side can recapture.
+        let our_attackers = attackers & pos.piece(current_side);
         if our_attackers == 0 {
-            break;                      // no more recaptures
-        }
-
-        /* ---- pick the least-valuable *legal* attacker ---- */
-        let mut chosen = 0u64;
-        for pc in Piece::PAWN..=Piece::KING {
-            let mut bb_pc = our_attackers & pos.piece(pc);
-            while bb_pc > 0 {
-                let from = bb_pc.trailing_zeros() as usize;
-                let bit  = 1u64 << from;
-
-                // Occupancy after this recapture
-                let mut occ_after = (occ ^ bit) | (1 << sq);
-
-                // King square for this side if its king moves
-                let ksq = if pc == Piece::KING { sq } else { king_sq[us] };
-
-                // Only accept attacker if its king remains safe
-                if !pos.is_square_attacked(ksq, us, occ_after) {
-                    chosen = bit;
-                    next   = pc;
-                    occ    = occ_after;
-                    if pc == Piece::KING {
-                        king_sq[us] = sq;
-                    }
-                    break;
-                }
-                bb_pc &= bb_pc - 1;      // try next attacker of same type
-            }
-            if chosen != 0 {
-                break;                  // we found a legal recapture
-            }
-        }
-
-        if chosen == 0 {
-            break;                      // no legal recapture exists
-        }
-
-        // Newly revealed x-ray attacks
-        attackers |= Attacks::bishop(sq, occ) & bishops;
-        attackers |= Attacks::rook(sq,   occ) & rooks;
-        attackers &= occ;
-
-        score = -score - 1 - SEE_VALS[next];
-        us   ^= 1;                      // change side
-
-        if score >= 0 {
-            if next == Piece::KING && attackers & pos.piece(us) > 0 {
-                us ^= 1;                // special: side still has the move
-            }
             break;
         }
+
+        // 5. Find the least valuable, legal attacker.
+        let mut recapturer_sq = 64;
+        let mut recapturing_pc = Piece::EMPTY;
+        for pc in Piece::PAWN..=Piece::KING {
+            let mut bb_pc = our_attackers & pos.piece(pc);
+            if bb_pc > 0 {
+                let from = bb_pc.trailing_zeros() as usize;
+
+                // Legality Check: Does this recapture leave the king in check?
+                let ksq = if pc == Piece::KING { to_sq } else { king_sq[current_side] };
+                let next_occ = occ ^ (1 << from); // Occupancy if this piece moves
+                if !pos.is_square_attacked(ksq, current_side, next_occ) {
+                    recapturer_sq = from;
+                    recapturing_pc = pc;
+                    break;
+                }
+            }
+        }
+
+        if recapturing_pc == Piece::EMPTY {
+            break; // No legal recaptures found.
+        }
+
+        // 6. Update state for the next iteration.
+        occ ^= 1 << recapturer_sq; // The recapturing piece is removed from its square.
+        if recapturing_pc == Piece::KING {
+            king_sq[current_side] = to_sq;
+        }
+
+        // The current side loses `recapturing_pc` but wins `captured_val`.
+        // We update `gain` from the perspective of the *initial* mover.
+        gain -= captured_val;
+
+        // The new "captured" piece is the one that just moved.
+        captured_val = SEE_VALS[recapturing_pc];
+
+        // Pruning: if the exchange is already losing for the initial side, stop.
+        if gain < threshold {
+            return false;
+        }
+
+        // Optimization: if the opponent's recapture value is greater than the
+        // current gain, they can't make the exchange profitable for them.
+        // So the initial side comes out ahead.
+        if captured_val > gain {
+            return true;
+        }
+
+        // 7. Update attackers for x-rays using the NEW occupancy.
+        attackers &= occ; // Remove the piece that just moved.
+        if [Piece::PAWN, Piece::BISHOP, Piece::QUEEN].contains(&recapturing_pc) {
+            attackers |= Attacks::bishop(to_sq, occ) & bishops;
+        }
+        if [Piece::ROOK, Piece::QUEEN].contains(&recapturing_pc) {
+            attackers |= Attacks::rook(to_sq, occ) & rooks;
+        }
+
+        current_side ^= 1;
     }
 
-    // SEE is true when the original side comes out ahead
-    pos.stm() != us
+    // If the loop terminates, the final gain determines the result.
+    gain >= threshold
 }
