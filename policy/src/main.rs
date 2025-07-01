@@ -179,23 +179,17 @@ fn network(size: usize) -> Graph {
     let main = l1.forward(trunk.clone()); // 6 144  1 880
 
     // -- secondary path ---------------------------------------------------
-    let branch_in = trunk.pairwise_mul();               // 6 144 → 3 072   (features)
-    let mut branch = l2.forward(branch_in.clone());     // 3 072 → 1 880   (W·x)
 
     // ---- add the SEE term to the weights (W  +  see_j) ------------------
-    // 1.  compute  Σ xᵢ   once for the current position in the batch
+    // 1.  compute once for the current position in the batch
     let ones = builder.new_weights(
         "ones_row",
-        Shape::new(1, size / 4),                        // 1 × 3 072
-        InitSettings::Normal { mean: 1.0, stdev: 0.0 }, // constant “1”
+        Shape::new(1, size / 2),                        // 1 x 6144
+        InitSettings::Normal { mean: 1.0, stdev: 0.0 }, // constant 1
     );
-    let inp_sum = ones.matmul(branch_in);               // (1 × 1)  ==  Σ xᵢ
+    let inp_sum = ones.matmul(trunk);               // (1 x 1)
 
-    // 2.  broadcast it and scale by tanh‑SEE for every move
-    let see_term = see_vec.matmul(inp_sum);             // (1 880 × 1)
-
-    // 3.  add to the affine output →  (W x  +  see_j·Σ xᵢ)
-    branch = branch + see_term;                         // 1 880 × 1
+    let branch = see_vec.matmul(inp_sum);             // (1880 x 1)
     // ---------------------------------------------------------------------
 
     // combine paths and apply loss
