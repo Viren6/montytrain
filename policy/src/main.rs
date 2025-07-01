@@ -170,7 +170,7 @@ fn network(size: usize) -> Graph {
     let l1 = builder.new_affine("l1", size / 2, moves::NUM_MOVES);
 
     // branch layers
-    let l3 = builder.new_affine("l3", 256, moves::NUM_MOVES); // 256  1 880
+    let l2 = builder.new_affine("l2", size / 4, moves::NUM_MOVES); // 3 072 -> 1 880
 
     let mut trunk = l0.forward(inputs).activate(Activation::CReLU);
     trunk = trunk.pairwise_mul(); // 12 288  **6 144**
@@ -179,18 +179,9 @@ fn network(size: usize) -> Graph {
     let main = l1.forward(trunk.clone()); // 6 144  1 880
 
     // -- secondary path
-    let mut branch = trunk;
-    for _ in 0..5 {
-        branch = branch.pairwise_mul();
-    } // 6 144  **192**
-
-    branch = branch.concat(see_vec); // 192 + 1 880 = **2 072**
-
-    let l2_in = (size / 64) + moves::NUM_MOVES; // 192 + 1 880
-    let l2 = builder.new_affine("l2", l2_in, 256); // 2 072  256
-
-    branch = l2.forward(branch).activate(Activation::CReLU); // 2072  256
-    branch = l3.forward(branch); // 256  1 880
+    let mut branch = trunk.pairwise_mul(); // 6 144 -> 3 072
+    branch = l2.forward(branch); // 3 072 -> 1 880
+    branch = branch.concat(see_vec).pairwise_mul(); // apply SEE scaling
 
     // combine paths and apply loss
     let out = main + branch; // element-wise sum
