@@ -24,7 +24,7 @@ impl<B: BackendMarker> GraphIROperation<B> for ApplyMoveDiff {
     }
 
     fn output_shape(&self, _: &GraphIR<B>) -> Result<Shape, GraphIRError> {
-        assert_eq!(self.moves.shape.cols(), INPUT_SIZE);
+        assert_eq!(self.moves.shape.rows(), INPUT_SIZE);
         assert_eq!(self.moves.shape.cols(), MAX_MOVES);
         assert_eq!(self.weights.shape.cols(), INPUT_SIZE);
         assert_eq!(self.hl.shape.cols(), 1);
