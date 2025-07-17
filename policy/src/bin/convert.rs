@@ -3,7 +3,7 @@ use std::{
     io::{BufReader, BufWriter},
 };
 
-use bullet::default::formats::montyformat::{MontyFormat, MontyValueFormat};
+use montyformat::{MontyFormat, MontyValueFormat};
 
 fn main() {
     let mut args = std::env::args();

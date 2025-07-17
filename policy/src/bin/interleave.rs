@@ -3,7 +3,7 @@ use std::{
     io::{BufReader, BufWriter, Write},
 };
 
-use bullet::default::formats::montyformat::{FastDeserialise, MontyFormat};
+use montyformat::{FastDeserialise, MontyFormat};
 
 fn main() -> std::io::Result<()> {
     let folder_path = "/home/privateclient/monty_value_training/monty-policy-data"; // Specify the folder to scan
@@ -22,8 +22,8 @@ fn main() -> std::io::Result<()> {
         })
         .collect();
 
-    println!("Writing to {:#?}", output);
-    println!("Reading from:\n{:#?}", inputs);
+    println!("Writing to {output:#?}");
+    println!("Reading from:\n{inputs:#?}");
     let mut streams = Vec::new();
     let mut total = 0;
 
