@@ -1,8 +1,8 @@
 use bullet_core::{
     graph::builder::Shape,
-    trainer::dataloader::{
+    trainer::{dataloader::{
         DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost,
-    },
+    }, DataLoadingError},
 };
 use montyformat::chess::Move;
 
@@ -26,7 +26,7 @@ impl MontyDataLoader {
 }
 
 impl DataLoader for MontyDataLoader {
-    type Error = ();
+    type Error = DataLoadingError;
 
     fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
         self,
@@ -128,7 +128,7 @@ fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
             HostMatrix::Sparse(HostSparseMatrix::new(
                 moves,
                 batch_size,
-                Shape::new(4, MAX_MOVES),
+                Shape::new(INPUT_SIZE, MAX_MOVES),
                 4 * MAX_MOVES,
             )),
         );

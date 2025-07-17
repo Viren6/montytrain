@@ -23,7 +23,7 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
         weights: l0.weights.annotated_node(),
         moves: moves.annotated_node(),
         hl: base_hl.annotated_node(),
-    });
+    }).screlu();
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let logits = l1.weights.matmul(move_hls) + l1.bias.matmul(ones);

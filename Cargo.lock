@@ -29,7 +29,7 @@ checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 [[package]]
 name = "bullet_core"
 version = "0.1.0"
-source = "git+https://github.com/jw1912/bullet?rev=0d402a45847f9cea9c038abf1f2e2fb8772ad404#0d402a45847f9cea9c038abf1f2e2fb8772ad404"
+source = "git+https://github.com/jw1912/bullet?rev=5762205d7635f32920074ca5fb9d351443f456a4#5762205d7635f32920074ca5fb9d351443f456a4"
 dependencies = [
  "rand",
  "rand_distr",
@@ -38,7 +38,7 @@ dependencies = [
 [[package]]
 name = "bullet_core"
 version = "0.1.0"
-source = "git+https://github.com/jw1912/bullet#10a67249103881932cc48b1ec7f4c5ffb652eebc"
+source = "git+https://github.com/jw1912/bullet#5762205d7635f32920074ca5fb9d351443f456a4"
 dependencies = [
  "rand",
  "rand_distr",
@@ -47,16 +47,16 @@ dependencies = [
 [[package]]
 name = "bullet_cuda_backend"
 version = "0.1.0"
-source = "git+https://github.com/jw1912/bullet?rev=0d402a45847f9cea9c038abf1f2e2fb8772ad404#0d402a45847f9cea9c038abf1f2e2fb8772ad404"
+source = "git+https://github.com/jw1912/bullet?rev=5762205d7635f32920074ca5fb9d351443f456a4#5762205d7635f32920074ca5fb9d351443f456a4"
 dependencies = [
- "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet?rev=0d402a45847f9cea9c038abf1f2e2fb8772ad404)",
+ "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet?rev=5762205d7635f32920074ca5fb9d351443f456a4)",
  "cudarc",
 ]
 
 [[package]]
 name = "bullet_hip_backend"
 version = "0.1.0"
-source = "git+https://github.com/jw1912/bullet#10a67249103881932cc48b1ec7f4c5ffb652eebc"
+source = "git+https://github.com/jw1912/bullet#5762205d7635f32920074ca5fb9d351443f456a4"
 dependencies = [
  "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet)",
  "cc",
@@ -65,7 +65,7 @@ dependencies = [
 [[package]]
 name = "bullet_lib"
 version = "1.0.0"
-source = "git+https://github.com/jw1912/bullet#10a67249103881932cc48b1ec7f4c5ffb652eebc"
+source = "git+https://github.com/jw1912/bullet#5762205d7635f32920074ca5fb9d351443f456a4"
 dependencies = [
  "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet)",
  "bullet_hip_backend",
@@ -187,8 +187,9 @@ dependencies = [
 name = "policy"
 version = "0.1.0"
 dependencies = [
- "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet?rev=0d402a45847f9cea9c038abf1f2e2fb8772ad404)",
+ "bullet_core 0.1.0 (git+https://github.com/jw1912/bullet?rev=5762205d7635f32920074ca5fb9d351443f456a4)",
  "bullet_cuda_backend",
+ "cudarc",
  "montyformat",
 ]
 
