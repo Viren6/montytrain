@@ -2,7 +2,17 @@ pub mod data;
 pub mod inputs;
 pub mod model;
 
-use bullet_core::{device::Device, optimiser::{adam::{AdamW, AdamWParams}, Optimiser}, trainer::{schedule::{TrainingSchedule, TrainingSteps}, Trainer}};
+use bullet_core::{
+    device::Device,
+    optimiser::{
+        adam::{AdamW, AdamWParams},
+        Optimiser,
+    },
+    trainer::{
+        schedule::{TrainingSchedule, TrainingSteps},
+        Trainer,
+    },
+};
 use bullet_cuda_backend::CudaDevice;
 
 use crate::data::MontyDataLoader;
@@ -33,5 +43,7 @@ fn main() {
         lr_schedule: Box::new(|_, _| 0.001),
     };
 
-    trainer.train_custom(schedule, dataloader, |_, _, _, _| {}, |_, _| {}).unwrap();
+    trainer
+        .train_custom(schedule, dataloader, |_, _, _, _| {}, |_, _| {})
+        .unwrap();
 }

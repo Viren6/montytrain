@@ -31,7 +31,7 @@ extern "C" __global__ void kernel(
         return;
     }
 
-    int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
+    const int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
 
     float4 val = make_float4(0.0F, 0.0F, 0.0F, 0.0F);
 

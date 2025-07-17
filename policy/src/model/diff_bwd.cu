@@ -15,7 +15,7 @@ extern "C" __global__ void kernel(
         return;
     }
 
-    int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
+    const int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
 
     if (move.x + move.y + move.z + move.w != -4) {
         const float grd = ogrd[64 * hl_size * loc_in_batch + hl_size * loc_in_moves + loc_in_neurons];

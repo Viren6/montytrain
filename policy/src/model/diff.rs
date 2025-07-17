@@ -131,7 +131,9 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
         let device = weights.buf.device.clone();
 
         unsafe {
-            let func = device.get_custom_func_or_rtc("apply_move_diff_fwd", || include_str!("diff_fwd.cu").to_string())?;
+            let func = device.get_custom_func_or_rtc("apply_move_diff_fwd", || {
+                include_str!("diff_fwd.cu").to_string()
+            })?;
 
             let batch_size = batch_size.unwrap_or(1);
             let m4 = hl_size as u32 / 4;
@@ -140,7 +142,11 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
 
             let grid_dim = (chunks, 64, batch_size as u32);
 
-            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 0 };
+            let cfg = LaunchConfig {
+                block_dim: (threads, 1, 1),
+                grid_dim,
+                shared_mem_bytes: 0,
+            };
 
             device
                 .stream()
@@ -200,14 +206,20 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
         let device = output_grad.buf.device.clone();
 
         unsafe {
-            let func = device.get_custom_func_or_rtc("apply_move_diff_bwd", || include_str!("diff_bwd.cu").to_string())?;
+            let func = device.get_custom_func_or_rtc("apply_move_diff_bwd", || {
+                include_str!("diff_bwd.cu").to_string()
+            })?;
 
             let batch_size = batch_size.unwrap_or(1);
             let threads = (hl_size as u32).min(1024);
             let chunks = (hl_size as u32).div_ceil(threads);
             let grid_dim = (chunks, 64, batch_size as u32);
 
-            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 0 };
+            let cfg = LaunchConfig {
+                block_dim: (threads, 1, 1),
+                grid_dim,
+                shared_mem_bytes: 0,
+            };
 
             device
                 .stream()

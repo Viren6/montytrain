@@ -1,8 +1,11 @@
 use bullet_core::{
     graph::builder::Shape,
-    trainer::{dataloader::{
-        DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost,
-    }, DataLoadingError},
+    trainer::{
+        dataloader::{
+            DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost,
+        },
+        DataLoadingError,
+    },
 };
 use montyformat::chess::Move;
 
