@@ -20,7 +20,7 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let graph = model::make(device, 1024);
+    let (graph, node) = model::make(device, 2560);
 
     let params = AdamWParams { min_weight: -0.99, max_weight: 0.99, ..Default::default() };
     let optimiser = Optimiser::<_, AdamW<_>>::new(graph, params).unwrap();
@@ -44,8 +44,11 @@ fn main() {
                     let dir = format!("checkpoints/policy-{superbatch}");
                     let _ = std::fs::create_dir(&dir);
                     trainer.optimiser.write_to_checkpoint(&dir).unwrap();
+                    model::save_quantised(&trainer.optimiser.graph, &format!("{dir}/quantised.bin")).unwrap();
                 }
             },
         )
         .unwrap();
+
+    model::eval(&mut trainer.optimiser.graph, node, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 }

@@ -33,7 +33,7 @@ impl DataLoader for MontyDataLoader {
     }
 }
 
-fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
+pub fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
     let batch_size = data.len();
     let chunk_size = batch_size.div_ceil(threads);
 

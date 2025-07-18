@@ -1,18 +1,23 @@
 mod diff;
 mod mask;
 
-use bullet_core::graph::{
-    builder::{GraphBuilder, InitSettings, Shape},
-    Graph,
+use bullet_core::{
+    graph::{
+        builder::{GraphBuilder, InitSettings, Shape},
+        Graph, NodeId, NodeIdTy,
+    },
+    trainer::dataloader::PreparedBatchDevice,
 };
 use bullet_cuda_backend::CudaDevice;
+use montyformat::chess::{Castling, Move, Position};
 
 use crate::{
+    data::{loader::prepare, reader::DecompressedData},
     inputs::{INPUT_SIZE, MAX_ACTIVE_BASE, MAX_MOVES},
     model::mask::MaskOutNonMoves,
 };
 
-pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
+pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
     let builder = GraphBuilder::default();
 
     let inputs = builder.new_sparse_input("inputs", Shape::new(INPUT_SIZE, 1), MAX_ACTIVE_BASE);
@@ -36,5 +41,57 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
     let loss = masked.softmax_crossentropy_loss(targets).reshape(Shape::new(MAX_MOVES, 1));
     let _ = ones.matmul(loss);
 
-    builder.build(device)
+    let node = NodeId::new(loss.annotated_node().idx, NodeIdTy::Ancillary(0));
+    (builder.build(device), node)
+}
+
+pub fn save_quantised(graph: &Graph<CudaDevice>, path: &str) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path).unwrap();
+
+    let mut quant = Vec::new();
+
+    for id in ["l0w", "mw", "l0b", "l1w", "l1b"] {
+        let vals = graph.get_weights(id).get_dense_vals().unwrap();
+
+        for x in vals {
+            let q = (x * 128.0).round() as i8;
+            assert_eq!((x * 128.0).round(), f32::from(q));
+            quant.extend_from_slice(&q.to_le_bytes());
+        }
+    }
+
+    file.write_all(&quant)
+}
+
+pub fn eval(graph: &mut Graph<CudaDevice>, node: NodeId, fen: &str) {
+    let mut castling = Castling::default();
+    let pos = Position::parse_fen(fen, &mut castling);
+
+    let mut moves = [(0, 0); 64];
+    let mut num = 0;
+
+    pos.map_legal_moves(&castling, |mov| {
+        moves[num] = (u16::from(mov), 1);
+        num += 1;
+    });
+
+    let point = DecompressedData { pos, castling, moves, num };
+
+    let data = prepare(&[point], 1);
+
+    let mut on_device = PreparedBatchDevice::new(graph.device(), &data).unwrap();
+
+    on_device.load_into_graph(graph).unwrap();
+
+    let _ = graph.forward().unwrap();
+
+    let dist = graph.get(node).unwrap().get_dense_vals().unwrap();
+
+    println!();
+    println!("{fen}");
+    for i in 0..num {
+        println!("{} -> {:.2}%", Move::from(moves[i].0).to_uci(&castling), dist[i] * 100.0)
+    }
 }
