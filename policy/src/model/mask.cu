@@ -16,5 +16,5 @@ extern "C" __global__ void kernel(
 
     const int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
 
-    output[tid] = move.x + move.y + move.z + move.w != -4 ? input[tid] : -10000.0F;
+    output[tid] = move.x != -1 ? input[tid] : -10000.0F;
 }

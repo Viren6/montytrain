@@ -20,7 +20,7 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let (graph, node) = model::make(device, 512);
+    let graph = model::make(device, 512);
 
     let mut trainer = Trainer {
         optimiser: Optimiser::<_, AdamW<_>>::new(graph, AdamWParams::default()).unwrap(),
@@ -36,7 +36,7 @@ fn main() {
             batch_size: 4096,
             batches_per_superbatch: 256,
             start_superbatch: 1,
-            end_superbatch: 1,
+            end_superbatch: 100,
         },
         save_rate: 10,
         log_rate: 16,
@@ -46,17 +46,4 @@ fn main() {
     trainer
         .train_custom(schedule, dataloader, |_, _, _, _| {}, |_, _| {})
         .unwrap();
-
-    for node in node {
-        let x = trainer
-            .optimiser
-            .graph
-            .get(node)
-            .unwrap()
-            .get_dense_vals()
-            .unwrap();
-        println!();
-        println!("{node:?}");
-        println!("{:#?}", &x[..64]);
-    }
 }

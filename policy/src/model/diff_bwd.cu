@@ -22,11 +22,11 @@ extern "C" __global__ void kernel(
         const float grd = ogrd[hl_size * locmb + loc_in_neurons];
 
         atomicAdd(hgrd + hl_size * loc_in_batch + loc_in_neurons, grd);
-        atomicAdd(wgrd + hl_size * move.x + loc_in_neurons, grd);
+        atomicAdd(wgrd + hl_size * move.x + loc_in_neurons, -grd);
 
         if (move.y != -1)
         {
-            atomicAdd(wgrd + hl_size * move.y + loc_in_neurons, grd);
+            atomicAdd(wgrd + hl_size * move.y + loc_in_neurons, -grd);
         }
 
         atomicAdd(wgrd + hl_size * move.z + loc_in_neurons, grd);
