@@ -22,25 +22,17 @@ fn main() {
 
     let graph = model::make(device, 1024);
 
-    let mut trainer = Trainer {
-        optimiser: Optimiser::<_, AdamW<_>>::new(graph, AdamWParams::default()).unwrap(),
-        state: (),
-    };
+    let params = AdamWParams { min_weight: -0.99, max_weight: 0.99, ..Default::default() };
+    let optimiser = Optimiser::<_, AdamW<_>>::new(graph, params).unwrap();
+
+    let mut trainer = Trainer { optimiser, state: () };
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
-    let steps = TrainingSteps {
-        batch_size: 4096,
-        batches_per_superbatch: 256,
-        start_superbatch: 1,
-        end_superbatch: 10,
-    };
+    let steps =
+        TrainingSteps { batch_size: 4096, batches_per_superbatch: 256, start_superbatch: 1, end_superbatch: 10 };
 
-    let schedule = TrainingSchedule {
-        steps,
-        log_rate: 16,
-        lr_schedule: Box::new(|_, _| 0.001),
-    };
+    let schedule = TrainingSchedule { steps, log_rate: 16, lr_schedule: Box::new(|_, _| 0.001) };
 
     trainer
         .train_custom(

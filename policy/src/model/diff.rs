@@ -40,11 +40,7 @@ impl<B: BackendMarker> GraphIROperation<B> for ApplyMoveDiff {
 }
 
 impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiff {
-    fn forward_pass(
-        &self,
-        _node_info: &GraphIRNodeInfo,
-        output_node: usize,
-    ) -> GraphFunction<CudaDevice> {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CudaDevice> {
         let weights = NodeId::new(self.weights.idx, NodeIdTy::Values);
         let moves = NodeId::new(self.moves.idx, NodeIdTy::Values);
         let hl = NodeId::new(self.hl.idx, NodeIdTy::Values);
@@ -53,21 +49,12 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiff {
         let mut func = GraphFunction::default();
 
         func.push(MaybeUpdateBatchSize { input: hl, output });
-        func.push(ApplyMoveDiffFwd {
-            weights,
-            moves,
-            hl,
-            output,
-        });
+        func.push(ApplyMoveDiffFwd { weights, moves, hl, output });
 
         func
     }
 
-    fn backward_pass(
-        &self,
-        _node_info: &GraphIRNodeInfo,
-        output_node: usize,
-    ) -> GraphFunction<CudaDevice> {
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CudaDevice> {
         let moves = NodeId::new(self.moves.idx, NodeIdTy::Values);
         let weights_grad = NodeId::new(self.weights.idx, NodeIdTy::Gradients);
         let hl_grad = NodeId::new(self.hl.idx, NodeIdTy::Gradients);
@@ -76,17 +63,8 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiff {
 
         let mut func = GraphFunction::default();
 
-        func.push(MaybeUpdateBatchSize {
-            input: output_grad,
-            output: hl_grad,
-        });
-        func.push(ApplyMoveDiffBwd {
-            weights_grad,
-            moves,
-            hl_grad,
-            output_grad,
-            output,
-        });
+        func.push(MaybeUpdateBatchSize { input: output_grad, output: hl_grad });
+        func.push(ApplyMoveDiffBwd { weights_grad, moves, hl_grad, output_grad, output });
 
         func
     }
@@ -119,10 +97,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
 
         assert_eq!(hl_size % 4, 0);
 
-        if weights.batch_size().is_some()
-            || batch_size != moves.batch_size()
-            || batch_size != output.batch_size()
-        {
+        if weights.batch_size().is_some() || batch_size != moves.batch_size() || batch_size != output.batch_size() {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
@@ -133,9 +108,8 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
         let device = weights.buf.device.clone();
 
         unsafe {
-            let func = device.get_custom_func_or_rtc("apply_move_diff_fwd", || {
-                include_str!("diff_fwd.cu").to_string()
-            })?;
+            let func =
+                device.get_custom_func_or_rtc("apply_move_diff_fwd", || include_str!("diff_fwd.cu").to_string())?;
 
             let batch_size = batch_size.unwrap_or(1);
             let m4 = hl_size as u32 / 4;
@@ -144,11 +118,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
 
             let grid_dim = (chunks, 64, batch_size as u32);
 
-            let cfg = LaunchConfig {
-                block_dim: (threads, 1, 1),
-                grid_dim,
-                shared_mem_bytes: 0,
-            };
+            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 0 };
 
             device
                 .stream()
@@ -212,20 +182,15 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
         let device = output_grad.buf.device.clone();
 
         unsafe {
-            let func = device.get_custom_func_or_rtc("apply_move_diff_bwd", || {
-                include_str!("diff_bwd.cu").to_string()
-            })?;
+            let func =
+                device.get_custom_func_or_rtc("apply_move_diff_bwd", || include_str!("diff_bwd.cu").to_string())?;
 
             let batch_size = batch_size.unwrap_or(1);
             let threads = (hl_size as u32).min(1024);
             let chunks = (hl_size as u32).div_ceil(threads);
             let grid_dim = (chunks, 64, batch_size as u32);
 
-            let cfg = LaunchConfig {
-                block_dim: (threads, 1, 1),
-                grid_dim,
-                shared_mem_bytes: 0,
-            };
+            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 0 };
 
             device
                 .stream()

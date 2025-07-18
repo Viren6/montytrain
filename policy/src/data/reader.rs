@@ -115,12 +115,7 @@ fn parse_into_buffer(game: MontyFormat, buffer: &mut Vec<DecompressedData>) {
     for data in game.moves {
         if let Some(dist) = data.visit_distribution.as_ref() {
             if dist.len() > 1 && dist.len() <= MAX_MOVES {
-                let mut policy_data = DecompressedData {
-                    pos,
-                    castling,
-                    moves: [(0, 0); MAX_MOVES],
-                    num: dist.len(),
-                };
+                let mut policy_data = DecompressedData { pos, castling, moves: [(0, 0); MAX_MOVES], num: dist.len() };
 
                 for (i, (mov, visits)) in dist.iter().enumerate() {
                     policy_data.moves[i] = (u16::from(*mov), *visits as u16);
@@ -138,10 +133,7 @@ pub struct Rand(u64);
 
 impl Rand {
     pub fn with_seed() -> Self {
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Guaranteed increasing.")
-            .as_micros() as u64
+        let seed = SystemTime::now().duration_since(UNIX_EPOCH).expect("Guaranteed increasing.").as_micros() as u64
             & 0xFFFF_FFFF;
 
         Self(seed)

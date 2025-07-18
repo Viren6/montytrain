@@ -35,11 +35,7 @@ impl<B: BackendMarker> GraphIROperation<B> for MaskOutNonMoves {
 }
 
 impl GraphIROperationCompilable<CudaMarker> for MaskOutNonMoves {
-    fn forward_pass(
-        &self,
-        _node_info: &GraphIRNodeInfo,
-        output_node: usize,
-    ) -> GraphFunction<CudaDevice> {
+    fn forward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CudaDevice> {
         let moves = NodeId::new(self.moves.idx, NodeIdTy::Values);
         let input = NodeId::new(self.input.idx, NodeIdTy::Values);
         let output = NodeId::new(output_node, NodeIdTy::Values);
@@ -47,35 +43,19 @@ impl GraphIROperationCompilable<CudaMarker> for MaskOutNonMoves {
         let mut func = GraphFunction::default();
 
         func.push(MaybeUpdateBatchSize { input, output });
-        func.push(MaskOutNonMovesFwd {
-            input,
-            moves,
-            output,
-        });
+        func.push(MaskOutNonMovesFwd { input, moves, output });
 
         func
     }
 
-    fn backward_pass(
-        &self,
-        _node_info: &GraphIRNodeInfo,
-        output_node: usize,
-    ) -> GraphFunction<CudaDevice> {
+    fn backward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CudaDevice> {
         let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
         let input_grad = NodeId::new(self.input.idx, NodeIdTy::Gradients);
 
         let mut func = GraphFunction::default();
 
-        func.push(MaybeUpdateBatchSize {
-            input: output_grad,
-            output: input_grad,
-        });
-        func.push(LinearCombination {
-            input: output_grad,
-            input_mul: 1.0,
-            output: input_grad,
-            output_mul: 1.0,
-        });
+        func.push(MaybeUpdateBatchSize { input: output_grad, output: input_grad });
+        func.push(LinearCombination { input: output_grad, input_mul: 1.0, output: input_grad, output_mul: 1.0 });
 
         func
     }
@@ -115,18 +95,14 @@ impl GraphInstruction<CudaDevice> for MaskOutNonMovesFwd {
         let device = input.buf.device.clone();
 
         unsafe {
-            let func = device
-                .get_custom_func_or_rtc("mask_out", || include_str!("mask.cu").to_string())?;
+            let func = device.get_custom_func_or_rtc("mask_out", || include_str!("mask.cu").to_string())?;
 
             let batch_size = batch_size.unwrap_or(1);
             let threads = 1024;
             let dim = (single_size * batch_size).div_ceil(threads);
 
-            let cfg = LaunchConfig {
-                block_dim: (threads as u32, 1, 1),
-                grid_dim: (dim as u32, 1, 1),
-                shared_mem_bytes: 0,
-            };
+            let cfg =
+                LaunchConfig { block_dim: (threads as u32, 1, 1), grid_dim: (dim as u32, 1, 1), shared_mem_bytes: 0 };
 
             device
                 .stream()

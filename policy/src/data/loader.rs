@@ -1,9 +1,7 @@
 use bullet_core::{
     graph::builder::Shape,
     trainer::{
-        dataloader::{
-            DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost,
-        },
+        dataloader::{DataLoader, HostDenseMatrix, HostMatrix, HostSparseMatrix, PreparedBatchHost},
         DataLoadingError,
     },
 };
@@ -21,23 +19,15 @@ pub struct MontyDataLoader {
 
 impl MontyDataLoader {
     pub fn new(path: &str, buffer_size_mb: usize, threads: usize) -> Self {
-        Self {
-            reader: DataReader::new(path, buffer_size_mb),
-            threads,
-        }
+        Self { reader: DataReader::new(path, buffer_size_mb), threads }
     }
 }
 
 impl DataLoader for MontyDataLoader {
     type Error = DataLoadingError;
 
-    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(
-        self,
-        batch_size: usize,
-        mut f: F,
-    ) -> Result<(), Self::Error> {
-        self.reader
-            .map_batches(batch_size, |batch| f(prepare(batch, self.threads)));
+    fn map_batches<F: FnMut(PreparedBatchHost) -> bool>(self, batch_size: usize, mut f: F) -> Result<(), Self::Error> {
+        self.reader.map_batches(batch_size, |batch| f(prepare(batch, self.threads)));
 
         Ok(())
     }
@@ -75,10 +65,7 @@ fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
                         input_chunk[input_offset + k] = -1;
                     }
 
-                    assert!(
-                        j <= MAX_ACTIVE_BASE,
-                        "More inputs provided than the specified maximum!"
-                    );
+                    assert!(j <= MAX_ACTIVE_BASE, "More inputs provided than the specified maximum!");
 
                     let mut total = 0;
                     let mut distinct = 0;
@@ -110,20 +97,12 @@ fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
         }
     });
 
-    let mut prep = PreparedBatchHost {
-        batch_size,
-        inputs: Default::default(),
-    };
+    let mut prep = PreparedBatchHost { batch_size, inputs: Default::default() };
 
     unsafe {
         prep.inputs.insert(
             "inputs".to_string(),
-            HostMatrix::Sparse(HostSparseMatrix::new(
-                inputs,
-                batch_size,
-                Shape::new(INPUT_SIZE, 1),
-                MAX_ACTIVE_BASE,
-            )),
+            HostMatrix::Sparse(HostSparseMatrix::new(inputs, batch_size, Shape::new(INPUT_SIZE, 1), MAX_ACTIVE_BASE)),
         );
 
         prep.inputs.insert(
@@ -139,11 +118,7 @@ fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
 
     prep.inputs.insert(
         "targets".to_string(),
-        HostMatrix::Dense(HostDenseMatrix::new(
-            dist,
-            batch_size,
-            Shape::new(MAX_MOVES, 1),
-        )),
+        HostMatrix::Dense(HostDenseMatrix::new(dist, batch_size, Shape::new(MAX_MOVES, 1))),
     );
 
     prep
