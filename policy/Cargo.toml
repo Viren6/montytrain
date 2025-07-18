@@ -5,7 +5,7 @@ edition = "2021"
 authors.workspace = true
 
 [dependencies]
-bullet_core = { package = "bullet_core", git = 'https://github.com/jw1912/bullet', rev = "afc6e3aef1c6bb78f3eebfd3a1e45ba6c73554e4" }
-bullet_cuda_backend = { package = "bullet_cuda_backend", git = 'https://github.com/jw1912/bullet', rev = "afc6e3aef1c6bb78f3eebfd3a1e45ba6c73554e4" }
+bullet_core = { package = "bullet_core", git = 'https://github.com/jw1912/bullet', rev = "87563da99c573cb64e362da7416b7c06baef72a0" }
+bullet_cuda_backend = { package = "bullet_cuda_backend", git = 'https://github.com/jw1912/bullet', rev = "87563da99c573cb64e362da7416b7c06baef72a0" }
 cudarc = "=0.16.4"
 montyformat = "0.9.0"
