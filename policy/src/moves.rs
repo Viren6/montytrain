@@ -5,18 +5,19 @@ pub const PROMOS: usize = 4 * 22;
 
 pub fn map_move_to_index(pos: &Position, mov: Move) -> usize {
     let good_see = (OFFSETS[64] + PROMOS) * usize::from(see(pos, &mov, -108));
+    let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
+    let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
+    let flip = vert ^ hori;
+    let from = usize::from(mov.src() ^ flip);
+    let dest = usize::from(mov.to() ^ flip);
 
     let idx = if mov.is_promo() {
-        let ffile = mov.src() % 8;
-        let tfile = mov.to() % 8;
+        let ffile = from % 8;
+        let tfile = dest % 8;
         let promo_id = 2 * ffile + tfile;
 
-        OFFSETS[64] + 22 * (mov.promo_pc() - Piece::KNIGHT) + usize::from(promo_id)
+        OFFSETS[64] + 22 * (mov.promo_pc() - Piece::KNIGHT) + promo_id
     } else {
-        let flip = if pos.stm() == Side::BLACK { 56 } else { 0 };
-        let from = usize::from(mov.src() ^ flip);
-        let dest = usize::from(mov.to() ^ flip);
-
         let below = ALL_DESTINATIONS[from] & ((1 << dest) - 1);
 
         OFFSETS[from] + below.count_ones() as usize
