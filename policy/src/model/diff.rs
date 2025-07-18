@@ -72,6 +72,7 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiff {
         let weights_grad = NodeId::new(self.weights.idx, NodeIdTy::Gradients);
         let hl_grad = NodeId::new(self.hl.idx, NodeIdTy::Gradients);
         let output_grad = NodeId::new(output_node, NodeIdTy::Gradients);
+        let output = NodeId::new(output_node, NodeIdTy::Values);
 
         let mut func = GraphFunction::default();
 
@@ -84,6 +85,7 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiff {
             moves,
             hl_grad,
             output_grad,
+            output,
         });
 
         func
@@ -170,6 +172,7 @@ pub struct ApplyMoveDiffBwd {
     weights_grad: NodeId,
     moves: NodeId,
     hl_grad: NodeId,
+    output: NodeId,
     output_grad: NodeId,
 }
 
@@ -178,7 +181,10 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
         let moves = graph.get(self.moves)?;
         let moves = moves.sparse()?;
 
-        let output_grad = graph.get_mut(self.output_grad)?;
+        let output = graph.get(self.output)?;
+        let output = output.dense()?;
+
+        let output_grad = graph.get(self.output_grad)?;
         let output_grad = output_grad.dense()?;
 
         let mut hl_grad = graph.get_mut(self.hl_grad)?;
@@ -228,6 +234,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
                 .arg(&(hl_size as i32))
                 .arg(&moves.buf.buf)
                 .arg(&output_grad.buf.buf)
+                .arg(&output.buf.buf)
                 .arg(&mut weights_grad.buf.buf)
                 .arg(&mut hl_grad.buf.buf)
                 .launch(cfg)

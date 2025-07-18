@@ -31,13 +31,11 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
     let l1 = builder.new_affine("l1", hl, 1);
 
     let base_hl = l0.forward(inputs);
-    let move_hls = builder
-        .apply(diff::ApplyMoveDiff {
-            weights: mw.annotated_node(),
-            moves: moves.annotated_node(),
-            hl: base_hl.annotated_node(),
-        })
-        .screlu();
+    let move_hls = builder.apply(diff::ApplyMoveDiff {
+        weights: mw.annotated_node(),
+        moves: moves.annotated_node(),
+        hl: base_hl.annotated_node(),
+    });
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let logits = l1.weights.matmul(move_hls) + l1.bias.matmul(ones);

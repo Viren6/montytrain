@@ -29,21 +29,31 @@ fn main() {
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
+    let steps = TrainingSteps {
+        batch_size: 4096,
+        batches_per_superbatch: 256,
+        start_superbatch: 1,
+        end_superbatch: 10,
+    };
+
     let schedule = TrainingSchedule {
-        net_id: "policy".to_string(),
-        out_dir: "checkpoints".to_string(),
-        steps: TrainingSteps {
-            batch_size: 4096,
-            batches_per_superbatch: 256,
-            start_superbatch: 1,
-            end_superbatch: 100,
-        },
-        save_rate: 10,
+        steps,
         log_rate: 16,
         lr_schedule: Box::new(|_, _| 0.001),
     };
 
     trainer
-        .train_custom(schedule, dataloader, |_, _, _, _| {}, |_, _| {})
+        .train_custom(
+            schedule,
+            dataloader,
+            |_, _, _, _| {},
+            |trainer, superbatch| {
+                if superbatch % 10 == 0 || superbatch == steps.end_superbatch {
+                    let dir = format!("checkpoints/policy-{superbatch}");
+                    std::fs::create_dir(&dir).unwrap();
+                    trainer.optimiser.write_to_checkpoint(&dir).unwrap();
+                }
+            },
+        )
         .unwrap();
 }
