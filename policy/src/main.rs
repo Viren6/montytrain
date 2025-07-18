@@ -42,7 +42,7 @@ fn main() {
             |trainer, superbatch| {
                 if superbatch % 10 == 0 || superbatch == steps.end_superbatch {
                     let dir = format!("checkpoints/policy-{superbatch}");
-                    std::fs::create_dir(&dir).unwrap();
+                    let _ = std::fs::create_dir(&dir);
                     trainer.optimiser.write_to_checkpoint(&dir).unwrap();
                 }
             },
