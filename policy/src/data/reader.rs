@@ -65,7 +65,7 @@ impl DataReader {
                         let diff = shuffle_buffer.capacity() - shuffle_buffer.len();
                         shuffle_buffer.extend_from_slice(&reusable_buffer[..diff]);
 
-                        shuffle(&mut shuffle_buffer);
+                        //shuffle(&mut shuffle_buffer);
 
                         if buffer_msg_receiver.try_recv().unwrap_or(false) {
                             break 'dataloading;

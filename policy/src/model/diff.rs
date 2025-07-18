@@ -152,7 +152,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
 
             let grid_dim = (chunks, 64, batch_size as u32);
 
-            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 0 };
+            let cfg = LaunchConfig { block_dim: (threads, 1, 1), grid_dim, shared_mem_bytes: 4 * threads };
 
             device
                 .stream()

@@ -30,6 +30,7 @@ extern "C" __global__ void kernel(
     float* hl_output,
     float* output
 ) {
+    extern __shared__ float sdata[];
     const int loc_in_batch = blockIdx.z;
     const int loc_in_moves = blockIdx.y;
     const int loc_in_neurons = blockIdx.x * blockDim.x + threadIdx.x;
@@ -68,7 +69,15 @@ extern "C" __global__ void kernel(
 
         const float4 toutw = reinterpret_cast<const float4*>(out_weights)[loc_in_neurons];
         const float tout = val.x * toutw.x + val.y * toutw.y + val.z * toutw.z + val.w * toutw.w;
-        atomicAdd(output + locmb, tout);
+
+        const int tid = threadIdx.x;
+        sdata[tid] = tout;
+        __syncthreads();
+        for(unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
+            if (tid < s) sdata[tid] += sdata[tid + s];
+            __syncthreads();
+        }
+        if (tid == 0) atomicAdd(output + locmb, sdata[0]);
     }
 
     reinterpret_cast<float4*>(hl_output + hl_size * locmb)[loc_in_neurons] = val;
