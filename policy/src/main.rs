@@ -20,7 +20,7 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let graph = model::make(device, 1024);
+    let (graph, node) = model::make(device, 512);
 
     let mut trainer = Trainer {
         optimiser: Optimiser::<_, AdamW<_>>::new(graph, AdamWParams::default()).unwrap(),
@@ -30,14 +30,14 @@ fn main() {
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
     let schedule = TrainingSchedule {
+        net_id: "policy".to_string(),
         out_dir: "checkpoints".to_string(),
         steps: TrainingSteps {
             batch_size: 4096,
             batches_per_superbatch: 256,
             start_superbatch: 1,
-            end_superbatch: 100,
+            end_superbatch: 1,
         },
-        net_id: "policy".to_string(),
         save_rate: 10,
         log_rate: 16,
         lr_schedule: Box::new(|_, _| 0.001),
@@ -46,4 +46,17 @@ fn main() {
     trainer
         .train_custom(schedule, dataloader, |_, _, _, _| {}, |_, _| {})
         .unwrap();
+
+    for node in node {
+        let x = trainer
+            .optimiser
+            .graph
+            .get(node)
+            .unwrap()
+            .get_dense_vals()
+            .unwrap();
+        println!();
+        println!("{node:?}");
+        println!("{:#?}", &x[..64]);
+    }
 }

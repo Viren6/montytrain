@@ -3,7 +3,7 @@ mod mask;
 
 use bullet_core::graph::{
     builder::{GraphBuilder, Shape},
-    Graph,
+    Graph, NodeId, NodeIdTy,
 };
 use bullet_cuda_backend::CudaDevice;
 
@@ -12,7 +12,7 @@ use crate::{
     model::mask::MaskOutNonMoves,
 };
 
-pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
+pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, Vec<NodeId>) {
     let builder = GraphBuilder::default();
 
     let inputs = builder.new_sparse_input("inputs", Shape::new(INPUT_SIZE, 1), MAX_ACTIVE_BASE);
@@ -29,7 +29,7 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
             moves: moves.annotated_node(),
             hl: base_hl.annotated_node(),
         })
-        .screlu();
+        .crelu();
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let logits = l1.weights.matmul(move_hls) + l1.bias.matmul(ones);
@@ -42,5 +42,7 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
         .reshape(Shape::new(MAX_MOVES, 1));
     let _ = ones.matmul(loss);
 
-    builder.build(device)
+    let out_node = vec![NodeId::new(loss.annotated_node().idx, NodeIdTy::Values)];
+
+    (builder.build(device), out_node)
 }

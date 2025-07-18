@@ -31,27 +31,21 @@ extern "C" __global__ void kernel(
         return;
     }
 
-    const int4 move = reinterpret_cast<const int4*>(moves)[64 * loc_in_batch + loc_in_moves];
+    const int locmb = 64 * loc_in_batch + loc_in_moves;
+    const int4 move = reinterpret_cast<const int4*>(moves)[locmb];
 
     float4 val = make_float4(0.0F, 0.0F, 0.0F, 0.0F);
 
-    if (move.x + move.y + move.z + move.w != -4) {
-        val = reinterpret_cast<const float4*>(hl)[loc_in_neurons];
-
-        if (move.x != -1)
-        {
-            subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.x)[loc_in_neurons]);
-        }
+    if (move.x != -1) {
+        val = reinterpret_cast<const float4*>(hl + hl_size * loc_in_batch)[loc_in_neurons];
+        subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.x)[loc_in_neurons]);
 
         if (move.y != -1)
         {
             subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.y)[loc_in_neurons]);
         }
 
-        if (move.z != -1)
-        {
-            addf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.z)[loc_in_neurons]);
-        }
+        addf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.z)[loc_in_neurons]);
 
         if (move.w != -1)
         {
@@ -59,6 +53,5 @@ extern "C" __global__ void kernel(
         }
     }
 
-    float4* this_output = reinterpret_cast<float4*>(output + 64 * hl_size * loc_in_batch + hl_size * loc_in_moves);
-    this_output[loc_in_neurons] = val;
+    reinterpret_cast<float4*>(output + hl_size * locmb)[loc_in_neurons] = val;
 }

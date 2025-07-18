@@ -75,5 +75,10 @@ pub fn get_diff(pos: &Position, castling: &Castling, mov: Move) -> [i32; 4] {
         diff[3] = idx(0, Piece::ROOK, sf + [3, 5][ks]);
     }
 
+    for i in diff {
+        assert!(i < 768);
+        assert!(i >= -1);
+    }
+
     diff
 }
