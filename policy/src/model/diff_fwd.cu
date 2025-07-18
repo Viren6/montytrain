@@ -27,6 +27,7 @@ extern "C" __global__ void kernel(
     const float* out_weights,
     const float* hl,
     const int* moves,
+    const int* buckets,
     float* hl_output,
     float* output
 ) {
@@ -67,7 +68,7 @@ extern "C" __global__ void kernel(
         val.z = op(val.z);
         val.w = op(val.w);
 
-        const float4 toutw = reinterpret_cast<const float4*>(out_weights)[loc_in_neurons];
+        const float4 toutw = reinterpret_cast<const float4*>(out_weights + hl_size * buckets[locmb])[loc_in_neurons];
         const float tout = val.x * toutw.x + val.y * toutw.y + val.z * toutw.z + val.w * toutw.w;
 
         const int tid = threadIdx.x;

@@ -16,7 +16,10 @@ use bullet_core::{
 use bullet_cuda_backend::{CudaDevice, CudaError, CudaMarker};
 use cudarc::driver::{LaunchConfig, PushKernelArg};
 
-use crate::inputs::{INPUT_SIZE, MAX_MOVES};
+use crate::{
+    inputs::{INPUT_SIZE, MAX_MOVES},
+    moves::NUM_MOVE_INDICES,
+};
 
 #[derive(Debug)]
 pub struct ApplyMoveDiffAndDot {
@@ -24,11 +27,12 @@ pub struct ApplyMoveDiffAndDot {
     pub moves: AnnotatedNode,
     pub hl: AnnotatedNode,
     pub out_weights: AnnotatedNode,
+    pub buckets: AnnotatedNode,
 }
 
 impl<B: BackendMarker> GraphIROperation<B> for ApplyMoveDiffAndDot {
     fn nodes(&self) -> Vec<AnnotatedNode> {
-        vec![self.weights, self.moves, self.hl, self.out_weights]
+        vec![self.weights, self.moves, self.hl, self.out_weights, self.buckets]
     }
 
     fn output_shape(&self, _: &GraphIR<B>) -> Result<Shape, GraphIRError> {
@@ -37,7 +41,8 @@ impl<B: BackendMarker> GraphIROperation<B> for ApplyMoveDiffAndDot {
         assert_eq!(self.weights.shape.cols(), INPUT_SIZE);
         assert_eq!(self.hl.shape.cols(), 1);
         assert_eq!(self.weights.shape.rows(), self.hl.shape.rows());
-        assert_eq!(self.out_weights.shape, Shape::new(1, self.hl.shape.rows()));
+        assert_eq!(self.out_weights.shape, Shape::new(self.hl.shape.rows(), NUM_MOVE_INDICES));
+        assert_eq!(self.buckets.shape, Shape::new(NUM_MOVE_INDICES, MAX_MOVES));
 
         Ok(Shape::new(MAX_MOVES, 1))
     }
@@ -52,6 +57,7 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiffAndDot {
         let weights = NodeId::new(self.weights.idx, NodeIdTy::Values);
         let out_weights = NodeId::new(self.out_weights.idx, NodeIdTy::Values);
         let moves = NodeId::new(self.moves.idx, NodeIdTy::Values);
+        let buckets = NodeId::new(self.buckets.idx, NodeIdTy::Values);
         let hl = NodeId::new(self.hl.idx, NodeIdTy::Values);
         let hl_output = NodeId::new(output_node, NodeIdTy::Ancillary(0));
         let output = NodeId::new(output_node, NodeIdTy::Values);
@@ -61,13 +67,14 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiffAndDot {
         func.push(MaybeUpdateBatchSize { input: hl, output: hl_output });
         func.push(MaybeUpdateBatchSize { input: hl, output });
         func.push(SetBias { moves, output });
-        func.push(ApplyMoveDiffFwd { weights, moves, hl, out_weights, hl_output, output });
+        func.push(ApplyMoveDiffFwd { weights, moves, buckets, hl, out_weights, hl_output, output });
 
         func
     }
 
     fn backward_pass(&self, _node_info: &GraphIRNodeInfo, output_node: usize) -> GraphFunction<CudaDevice> {
         let moves = NodeId::new(self.moves.idx, NodeIdTy::Values);
+        let buckets = NodeId::new(self.buckets.idx, NodeIdTy::Values);
         let weights_grad = NodeId::new(self.weights.idx, NodeIdTy::Gradients);
         let out_weights = NodeId::new(self.out_weights.idx, NodeIdTy::Values);
         let out_weights_grad = NodeId::new(self.out_weights.idx, NodeIdTy::Gradients);
@@ -81,6 +88,7 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiffAndDot {
         func.push(ApplyMoveDiffBwd {
             weights_grad,
             moves,
+            buckets,
             hl_grad,
             output_grad,
             out_weights,
@@ -96,6 +104,7 @@ impl GraphIROperationCompilable<CudaMarker> for ApplyMoveDiffAndDot {
 pub struct ApplyMoveDiffFwd {
     weights: NodeId,
     moves: NodeId,
+    buckets: NodeId,
     hl: NodeId,
     out_weights: NodeId,
     hl_output: NodeId,
@@ -113,6 +122,9 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
         let moves = graph.get(self.moves)?;
         let moves = moves.sparse()?;
 
+        let buckets = graph.get(self.buckets)?;
+        let buckets = buckets.sparse()?;
+
         let hl = graph.get(self.hl)?;
         let hl = hl.dense()?;
 
@@ -129,13 +141,15 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
 
         if weights.batch_size().is_some()
             || batch_size != moves.batch_size()
+            || batch_size != buckets.batch_size()
             || batch_size != hl_output.batch_size()
             || batch_size != output.batch_size()
         {
             return Err(OperationError::MismatchedBatchSizes);
         }
 
-        if hl_output.single_size() != hl_size * MAX_MOVES || output.single_size != MAX_MOVES {
+        if hl_output.single_size() != hl_size * MAX_MOVES || output.single_size != MAX_MOVES || buckets.nnz != MAX_MOVES
+        {
             return Err(OperationError::InvalidTensorFormat);
         }
 
@@ -163,6 +177,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffFwd {
                 .arg(&out_weights.buf.buf)
                 .arg(&hl.buf.buf)
                 .arg(&moves.buf.buf)
+                .arg(&buckets.buf.buf)
                 .arg(&mut hl_output.buf.buf)
                 .arg(&mut output.buf.buf)
                 .launch(cfg)
@@ -179,6 +194,7 @@ pub struct ApplyMoveDiffBwd {
     out_weights: NodeId,
     out_weights_grad: NodeId,
     moves: NodeId,
+    buckets: NodeId,
     hl_grad: NodeId,
     output: NodeId,
     output_grad: NodeId,
@@ -188,6 +204,9 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
     fn execute(&self, graph: &Graph<CudaDevice>) -> Result<(), OperationError<CudaError>> {
         let moves = graph.get(self.moves)?;
         let moves = moves.sparse()?;
+
+        let buckets = graph.get(self.buckets)?;
+        let buckets = buckets.sparse()?;
 
         let output = graph.get(self.output)?;
         let output = output.dense()?;
@@ -244,6 +263,7 @@ impl GraphInstruction<CudaDevice> for ApplyMoveDiffBwd {
                 .arg(&(batch_size as i32))
                 .arg(&(hl_size as i32))
                 .arg(&moves.buf.buf)
+                .arg(&buckets.buf.buf)
                 .arg(&out_weights.buf.buf)
                 .arg(&output_grad.buf.buf)
                 .arg(&output.buf.buf)
