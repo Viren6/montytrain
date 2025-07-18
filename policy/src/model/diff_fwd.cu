@@ -73,11 +73,16 @@ extern "C" __global__ void kernel(
         const int tid = threadIdx.x;
         sdata[tid] = tout;
         __syncthreads();
-        for(unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
+
+        unsigned int rem;
+
+        for(unsigned int s = blockDim.x / 2; s > 0 && ((s & 1U) == 0); s >>= 1){
             if (tid < s) sdata[tid] += sdata[tid + s];
+            rem = s;
             __syncthreads();
         }
-        if (tid == 0) atomicAdd(output + locmb, sdata[0]);
+
+        if (tid < rem) atomicAdd(output + locmb, sdata[tid]);
     }
 
     reinterpret_cast<float4*>(hl_output + hl_size * locmb)[loc_in_neurons] = val;
