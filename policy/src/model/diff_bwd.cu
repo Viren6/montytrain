@@ -2,8 +2,10 @@ extern "C" __global__ void kernel(
     const int batch_size,
     const int hl_size,
     const int* moves,
+    const float* owgt,
     const float* ogrd,
-    const float* out,
+    const float* hl_out,
+    float* owgrd,
     float* wgrd,
     float* hgrd
 ) {
@@ -21,8 +23,14 @@ extern "C" __global__ void kernel(
 
     if (move.x != -1) {
         const int plc = hl_size * locmb + loc_in_neurons;
-        const float tout = out[plc];
-        const float grd = tout > 0.0F && tout < 1.0F ? 2.0F * sqrtf(tout) * ogrd[plc] : 0.0F;
+
+        const float tgrd = ogrd[locmb];
+        const float thl = hl_out[plc];
+
+        atomicAdd(owgrd + loc_in_neurons, thl * tgrd);
+
+        const float back_grd = tgrd * owgt[loc_in_neurons];
+        const float grd = thl > 0.0F && thl < 1.0F ? 2.0F * sqrtf(thl) * back_grd : 0.0F;
 
         atomicAdd(hgrd + hl_size * loc_in_batch + loc_in_neurons, grd);
         atomicAdd(wgrd + hl_size * move.x + loc_in_neurons, -grd);

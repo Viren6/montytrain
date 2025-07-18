@@ -24,8 +24,10 @@ extern "C" __global__ void kernel(
     const int batch_size,
     const int hl_size,
     const float* weights,
+    const float* out_weights,
     const float* hl,
     const int* moves,
+    float* hl_output,
     float* output
 ) {
     const int loc_in_batch = blockIdx.z;
@@ -42,7 +44,8 @@ extern "C" __global__ void kernel(
 
     float4 val = make_float4(0.0F, 0.0F, 0.0F, 0.0F);
 
-    if (move.x != -1) {
+    if (move.x != -1)
+    {
         val = reinterpret_cast<const float4*>(hl + hl_size * loc_in_batch)[loc_in_neurons];
         subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.x)[loc_in_neurons]);
 
@@ -62,7 +65,11 @@ extern "C" __global__ void kernel(
         val.y = op(val.y);
         val.z = op(val.z);
         val.w = op(val.w);
+
+        const float4 toutw = reinterpret_cast<const float4*>(out_weights)[loc_in_neurons];
+        const float tout = val.x * toutw.x + val.y * toutw.y + val.z * toutw.z + val.w * toutw.w;
+        atomicAdd(output + locmb, tout);
     }
 
-    reinterpret_cast<float4*>(output + hl_size * locmb)[loc_in_neurons] = val;
+    reinterpret_cast<float4*>(hl_output + hl_size * locmb)[loc_in_neurons] = val;
 }

@@ -1,5 +1,4 @@
 mod diff;
-mod mask;
 
 use bullet_core::{
     graph::{
@@ -14,7 +13,6 @@ use montyformat::chess::{Castling, Move, Position};
 use crate::{
     data::{loader::prepare, reader::DecompressedData},
     inputs::{INPUT_SIZE, MAX_ACTIVE_BASE, MAX_MOVES},
-    model::mask::MaskOutNonMoves,
 };
 
 pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
@@ -22,23 +20,23 @@ pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
 
     let inputs = builder.new_sparse_input("inputs", Shape::new(INPUT_SIZE, 1), MAX_ACTIVE_BASE);
     let moves = builder.new_sparse_input("moves", Shape::new(INPUT_SIZE, MAX_MOVES), 4 * MAX_MOVES);
-    let targets = builder.new_dense_input("targets", Shape::new(1, MAX_MOVES));
+    let targets = builder.new_dense_input("targets", Shape::new(MAX_MOVES, 1));
 
     let l0 = builder.new_affine("l0", INPUT_SIZE, hl);
     let mw = builder.new_weights("mw", Shape::new(hl, INPUT_SIZE), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
     let l1 = builder.new_affine("l1", hl, 1);
 
     let base_hl = l0.forward(inputs);
-    let move_hls = builder.apply(diff::ApplyMoveDiff {
+    let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
+
+    let logits = builder.apply(diff::ApplyMoveDiffAndDot {
         weights: mw.annotated_node(),
         moves: moves.annotated_node(),
         hl: base_hl.annotated_node(),
-    });
+        out_weights: l1.weights.annotated_node(),
+    }) + ones.reshape(Shape::new(MAX_MOVES, 1)).matmul(l1.bias);
 
-    let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
-    let logits = l1.weights.matmul(move_hls) + l1.bias.matmul(ones);
-    let masked = builder.apply(MaskOutNonMoves { input: logits.annotated_node(), moves: moves.annotated_node() });
-    let loss = masked.softmax_crossentropy_loss(targets).reshape(Shape::new(MAX_MOVES, 1));
+    let loss = logits.softmax_crossentropy_loss(targets);
     let _ = ones.matmul(loss);
 
     let node = NodeId::new(loss.annotated_node().idx, NodeIdTy::Ancillary(0));
