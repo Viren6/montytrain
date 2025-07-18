@@ -2,7 +2,7 @@ mod diff;
 mod mask;
 
 use bullet_core::graph::{
-    builder::{GraphBuilder, Shape},
+    builder::{GraphBuilder, InitSettings, Shape},
     Graph,
 };
 use bullet_cuda_backend::CudaDevice;
@@ -20,16 +20,24 @@ pub fn make(device: CudaDevice, hl: usize) -> Graph<CudaDevice> {
     let targets = builder.new_dense_input("targets", Shape::new(1, MAX_MOVES));
 
     let l0 = builder.new_affine("l0", INPUT_SIZE, hl);
+    let mw = builder.new_weights(
+        "mw",
+        Shape::new(hl, INPUT_SIZE),
+        InitSettings::Normal {
+            mean: 0.0,
+            stdev: 0.01,
+        },
+    );
     let l1 = builder.new_affine("l1", hl, 1);
 
     let base_hl = l0.forward(inputs);
     let move_hls = builder
         .apply(diff::ApplyMoveDiff {
-            weights: l0.weights.annotated_node(),
+            weights: mw.annotated_node(),
             moves: moves.annotated_node(),
             hl: base_hl.annotated_node(),
         })
-        .crelu();
+        .screlu();
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let logits = l1.weights.matmul(move_hls) + l1.bias.matmul(ones);
