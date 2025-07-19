@@ -1,10 +1,10 @@
 use montyformat::chess::{Castling, Flag, Move, Piece, Position, Side};
 
 pub const MAX_MOVES: usize = 64;
-pub const INPUT_SIZE: usize = 768;
+pub const INPUT_SIZE: usize = 768 * 4;
 pub const MAX_ACTIVE_BASE: usize = 32;
 
-pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
+pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, threats: u64, defences: u64, mut f: F) {
     let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
     let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
     let flip = vert ^ hori;
@@ -17,24 +17,61 @@ pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
 
         while our_bb > 0 {
             let sq = our_bb.trailing_zeros() as usize;
-            f(pc + (sq ^ flip));
+            let mut feat = pc + (sq ^ flip);
+
+            let bit = 1 << sq;
+            if threats & bit > 0 {
+                feat += 768;
+            }
+
+            if defences & bit > 0 {
+                feat += 768 * 2;
+            }
+
+            f(feat);
+
             our_bb &= our_bb - 1;
         }
 
         while opp_bb > 0 {
             let sq = opp_bb.trailing_zeros() as usize;
-            f(384 + pc + (sq ^ flip));
+            let mut feat = 384 + pc + (sq ^ flip);
+
+            let bit = 1 << sq;
+            if threats & bit > 0 {
+                feat += 768;
+            }
+
+            if defences & bit > 0 {
+                feat += 768 * 2;
+            }
+
+            f(feat);
+
             opp_bb &= opp_bb - 1;
         }
     }
 }
 
-pub fn get_diff(pos: &Position, castling: &Castling, mov: Move) -> [i32; 4] {
+pub fn get_diff(pos: &Position, castling: &Castling, mov: Move, threats: u64, defences: u64) -> [i32; 4] {
     let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
     let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
     let flip = vert ^ hori;
 
-    let idx = |stm, pc, sq| ([0, 384][stm] + 64 * (pc - 2) + (sq ^ flip)) as i32;
+    let idx = |stm, pc, sq| {
+        let mut feat = ([0, 384][stm] + 64 * (pc - 2) + (sq ^ flip)) as i32;
+
+        let bit = 1u64 << sq;
+        if threats & bit > 0 {
+            feat += 768;
+        }
+
+        if defences & bit > 0 {
+            feat += 768 * 2;
+        }
+
+        feat
+    };
 
     let mut diff = [-1; 4];
 
@@ -68,7 +105,7 @@ pub fn get_diff(pos: &Position, castling: &Castling, mov: Move) -> [i32; 4] {
     }
 
     for i in diff {
-        assert!(i < 768);
+        assert!(i < INPUT_SIZE as i32);
         assert!(i >= -1);
     }
 

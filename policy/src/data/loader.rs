@@ -59,8 +59,11 @@ pub fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
                     let moves_offset = 4 * MAX_MOVES * i;
                     let dist_offset = MAX_MOVES * i;
 
+                    let threats = point.pos.threats_by(point.pos.stm() ^ 1);
+                    let defences = point.pos.threats_by(point.pos.stm());
+
                     let mut j = 0;
-                    inputs::map_base_inputs(&point.pos, |feat| {
+                    inputs::map_base_inputs(&point.pos, threats, defences, |feat| {
                         assert!(feat < INPUT_SIZE);
                         input_chunk[input_offset + j] = feat as i32;
                         j += 1;
@@ -79,7 +82,7 @@ pub fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
                         total += visits;
 
                         let mov = Move::from(mov);
-                        let diff = inputs::get_diff(&point.pos, &point.castling, mov);
+                        let diff = inputs::get_diff(&point.pos, &point.castling, mov, threats, defences);
 
                         for k in 0..4 {
                             moves_chunk[moves_offset + 4 * distinct + k] = diff[k];

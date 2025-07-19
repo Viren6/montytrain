@@ -30,11 +30,11 @@ fn main() {
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
-    let end_superbatch = 600;
+    let end_superbatch = 2400;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
-    let steps = TrainingSteps { batch_size: 16384, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch };
+    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch };
 
     let schedule = TrainingSchedule {
         steps,
