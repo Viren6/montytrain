@@ -38,7 +38,7 @@ impl<B: BackendMarker> GraphIROperation<B> for ApplyMoveDiffAndDot {
     fn output_shape(&self, _: &GraphIR<B>) -> Result<Shape, GraphIRError> {
         assert_eq!(self.moves.shape.rows(), INPUT_SIZE);
         assert_eq!(self.moves.shape.cols(), MAX_MOVES);
-        assert_eq!(self.weights.shape.cols(), INPUT_SIZE);
+        assert_eq!(self.weights.shape.cols(), 2 * INPUT_SIZE);
         assert_eq!(self.hl.shape.cols(), 1);
         assert_eq!(self.weights.shape.rows(), self.hl.shape.rows());
         assert_eq!(self.out_weights.shape, Shape::new(self.hl.shape.rows(), NUM_MOVE_INDICES));

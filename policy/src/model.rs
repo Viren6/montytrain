@@ -25,7 +25,7 @@ pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
     let buckets = builder.new_sparse_input("buckets", Shape::new(NUM_MOVE_INDICES, MAX_MOVES), MAX_MOVES);
 
     let l0 = builder.new_affine("l0", INPUT_SIZE, hl);
-    let mw = builder.new_weights("mw", Shape::new(hl, INPUT_SIZE), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
+    let mw = builder.new_weights("mw", Shape::new(hl, 2 * INPUT_SIZE), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
     let l1w =
         builder.new_weights("l1w", Shape::new(hl, NUM_MOVE_INDICES), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
 

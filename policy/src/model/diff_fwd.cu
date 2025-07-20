@@ -6,14 +6,6 @@ __forceinline__ __device__ void addf4(float4* dst, const float4 src)
     dst->w += src.w;
 }
 
-__forceinline__ __device__ void subf4(float4* dst, const float4 src)
-{
-    dst->x -= src.x;
-    dst->y -= src.y;
-    dst->z -= src.z;
-    dst->w -= src.w;
-}
-
 __forceinline__ __device__ float op(const float x)
 {
     const float clamp = max(min(x, 1.0F), 0.0F);
@@ -49,11 +41,11 @@ extern "C" __global__ void kernel(
     if (move.x != -1)
     {
         val = reinterpret_cast<const float4*>(hl + hl_size * loc_in_batch)[loc_in_neurons];
-        subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.x)[loc_in_neurons]);
+        addf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.x)[loc_in_neurons]);
 
         if (move.y != -1)
         {
-            subf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.y)[loc_in_neurons]);
+            addf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.y)[loc_in_neurons]);
         }
 
         addf4(&val, reinterpret_cast<const float4*>(weights + hl_size * move.z)[loc_in_neurons]);

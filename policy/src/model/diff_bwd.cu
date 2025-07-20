@@ -35,11 +35,11 @@ extern "C" __global__ void kernel(
         const float grd = thl > 0.0F && thl < 1.0F ? 2.0F * sqrtf(thl) * back_grd : 0.0F;
 
         atomicAdd(hgrd + hl_size * loc_in_batch + loc_in_neurons, grd);
-        atomicAdd(wgrd + hl_size * move.x + loc_in_neurons, -grd);
+        atomicAdd(wgrd + hl_size * move.x + loc_in_neurons, grd);
 
         if (move.y != -1)
         {
-            atomicAdd(wgrd + hl_size * move.y + loc_in_neurons, -grd);
+            atomicAdd(wgrd + hl_size * move.y + loc_in_neurons, grd);
         }
 
         atomicAdd(wgrd + hl_size * move.z + loc_in_neurons, grd);

@@ -79,12 +79,12 @@ pub fn get_diff(pos: &Position, castling: &Castling, mov: Move, threats: u64, de
     let dst = mov.to() as usize;
 
     let moved = pos.get_pc(1 << src);
-    diff[0] = idx(0, moved, src);
+    diff[0] = INPUT_SIZE as i32 + idx(0, moved, src);
 
     if mov.is_en_passant() {
-        diff[1] = idx(1, Piece::PAWN, dst ^ 8);
+        diff[1] = INPUT_SIZE as i32 + idx(1, Piece::PAWN, dst ^ 8);
     } else if mov.is_capture() {
-        diff[1] = idx(1, pos.get_pc(1 << dst), dst);
+        diff[1] = INPUT_SIZE as i32 + idx(1, pos.get_pc(1 << dst), dst);
     }
 
     if mov.is_promo() {
@@ -105,7 +105,7 @@ pub fn get_diff(pos: &Position, castling: &Castling, mov: Move, threats: u64, de
     }
 
     for i in diff {
-        assert!(i < INPUT_SIZE as i32);
+        assert!(i < 2 * INPUT_SIZE as i32);
         assert!(i >= -1);
     }
 
