@@ -1,7 +1,6 @@
 pub mod data;
 pub mod inputs;
 pub mod model;
-pub mod moves;
 
 use bullet_core::{
     device::Device,
@@ -21,7 +20,7 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let (graph, node) = model::make(device, 2560);
+    let (graph, node) = model::make(device, 512, 32);
 
     let params = AdamWParams { min_weight: -0.99, max_weight: 0.99, ..Default::default() };
     let optimiser = Optimiser::<_, AdamW<_>>::new(graph, params).unwrap();
@@ -30,11 +29,11 @@ fn main() {
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
-    let end_superbatch = 2400;
+    let end_superbatch = 1;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
-    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch };
+    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 512, start_superbatch: 1, end_superbatch };
 
     let schedule = TrainingSchedule {
         steps,
@@ -60,7 +59,6 @@ fn main() {
                     let dir = format!("checkpoints/policy-{superbatch}");
                     let _ = std::fs::create_dir(&dir);
                     trainer.optimiser.write_to_checkpoint(&dir).unwrap();
-                    model::save_quantised(&trainer.optimiser.graph, &format!("{dir}/quantised.bin")).unwrap();
                 }
             },
         )

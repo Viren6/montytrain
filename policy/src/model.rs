@@ -1,8 +1,8 @@
-mod diff;
+mod grab;
 
 use bullet_core::{
     graph::{
-        builder::{GraphBuilder, InitSettings, Shape},
+        builder::{GraphBuilder, Shape},
         Graph, NodeId, NodeIdTy,
     },
     trainer::dataloader::PreparedBatchDevice,
@@ -13,58 +13,33 @@ use montyformat::chess::{Castling, Move, Position};
 use crate::{
     data::{loader::prepare, reader::DecompressedData},
     inputs::{INPUT_SIZE, MAX_ACTIVE_BASE, MAX_MOVES},
-    moves::NUM_MOVE_INDICES,
 };
 
-pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
+pub fn make(device: CudaDevice, hl: usize, dim: usize) -> (Graph<CudaDevice>, NodeId) {
     let builder = GraphBuilder::default();
 
     let inputs = builder.new_sparse_input("inputs", Shape::new(INPUT_SIZE, 1), MAX_ACTIVE_BASE);
-    let moves = builder.new_sparse_input("moves", Shape::new(INPUT_SIZE, MAX_MOVES), 4 * MAX_MOVES);
     let targets = builder.new_dense_input("targets", Shape::new(MAX_MOVES, 1));
-    let buckets = builder.new_sparse_input("buckets", Shape::new(NUM_MOVE_INDICES, MAX_MOVES), MAX_MOVES);
+    let moves = builder.new_sparse_input("moves", Shape::new(64, 128), MAX_MOVES);
 
-    let l0 = builder.new_affine("l0", INPUT_SIZE, hl);
-    let mw = builder.new_weights("mw", Shape::new(hl, 2 * INPUT_SIZE), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
-    let l1w =
-        builder.new_weights("l1w", Shape::new(hl, NUM_MOVE_INDICES), InitSettings::Normal { mean: 0.0, stdev: 0.01 });
+    let src0 = builder.new_affine("src0", INPUT_SIZE, hl);
+    let src1 = builder.new_affine("src1", hl, 64 * dim);
+    let src_embed = src1.forward(src0.forward(inputs).screlu()).reshape(Shape::new(dim, 64));
 
-    let base_hl = l0.forward(inputs);
+    let dst0 = builder.new_affine("dst0", INPUT_SIZE, hl);
+    let dst1 = builder.new_affine("dst1", hl, 128 * dim);
+    let dst_embed = dst1.forward(dst0.forward(inputs).screlu()).reshape(Shape::new(dim, 128));
+
+    let attn = src_embed.gemm(true, dst_embed, false);
+
+    let logits = builder.apply(grab::Grab { input: attn.annotated_node(), indices: moves.annotated_node() });
+
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
-
-    let logits = builder.apply(diff::ApplyMoveDiffAndDot {
-        weights: mw.annotated_node(),
-        moves: moves.annotated_node(),
-        hl: base_hl.annotated_node(),
-        out_weights: l1w.annotated_node(),
-        buckets: buckets.annotated_node(),
-    });
-
     let loss = logits.softmax_crossentropy_loss(targets);
     let _ = ones.matmul(loss);
 
     let node = NodeId::new(loss.annotated_node().idx, NodeIdTy::Ancillary(0));
     (builder.build(device), node)
-}
-
-pub fn save_quantised(graph: &Graph<CudaDevice>, path: &str) -> std::io::Result<()> {
-    use std::io::Write;
-
-    let mut file = std::fs::File::create(path).unwrap();
-
-    let mut quant = Vec::new();
-
-    for id in ["l0w", "mw", "l0b", "l1w"] {
-        let vals = graph.get_weights(id).get_dense_vals().unwrap();
-
-        for x in vals {
-            let q = (x * 128.0).round() as i8;
-            assert_eq!((x * 128.0).round(), f32::from(q));
-            quant.extend_from_slice(&q.to_le_bytes());
-        }
-    }
-
-    file.write_all(&quant)
 }
 
 pub fn eval(graph: &mut Graph<CudaDevice>, node: NodeId, fen: &str) {
