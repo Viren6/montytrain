@@ -21,7 +21,7 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let (graph, node) = model::make(device, 512);
+    let (graph, node) = model::make(device, 2560);
 
     let params = AdamWParams { min_weight: -0.99, max_weight: 0.99, ..Default::default() };
     let optimiser = Optimiser::<_, AdamW<_>>::new(graph, params).unwrap();
