@@ -100,7 +100,7 @@ pub fn get_diff(pos: &Position, castling: &Castling, mov: Move, threats: u64, de
         let ks = usize::from(mov.flag() == Flag::KS);
         let sf = 56 * pos.stm();
 
-        diff[1] = idx(0, Piece::ROOK, sf + castling.rook_file(pos.stm(), ks) as usize);
+        diff[1] = INPUT_SIZE as i32 + idx(0, Piece::ROOK, sf + castling.rook_file(pos.stm(), ks) as usize);
         diff[3] = idx(0, Piece::ROOK, sf + [3, 5][ks]);
     }
 
