@@ -30,11 +30,11 @@ fn main() {
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
     let save_rate = 30;
-    let end_superbatch = 600;
+    let end_superbatch = 1;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
-    let steps = TrainingSteps { batch_size: 16384, batches_per_superbatch: 4096, start_superbatch: 1, end_superbatch };
+    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 512, start_superbatch: 1, end_superbatch };
 
     let schedule = TrainingSchedule {
         steps,
@@ -60,6 +60,7 @@ fn main() {
                     let dir = format!("checkpoints/policy-{superbatch}");
                     let _ = std::fs::create_dir(&dir);
                     trainer.optimiser.write_to_checkpoint(&dir).unwrap();
+                    model::save_quantised(&trainer.optimiser.graph, &format!("{dir}/quantised.bin")).unwrap();
                 }
             },
         )

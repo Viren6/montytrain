@@ -71,3 +71,43 @@ pub fn eval(graph: &mut Graph<CudaDevice>, node: NodeId, fen: &str) {
         println!("{} -> {:.2}%", Move::from(moves[i].0).to_uci(&castling), dist[i] * 100.0)
     }
 }
+
+pub fn save_quantised(graph: &Graph<CudaDevice>, path: &str) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut file = std::fs::File::create(path).unwrap();
+
+    let mut quant = Vec::new();
+
+    for id in ["src0w", "src0b", "dst0w", "dst0b"] {
+        let vals = graph.get_weights(id).get_dense_vals().unwrap();
+
+        for x in vals {
+            let q = (x * 255.0).round() as i16;
+            assert_eq!((x * 255.0).round(), f32::from(q));
+            quant.extend_from_slice(&q.to_le_bytes());
+        }
+    }
+
+    for id in ["src1w", "dst1w"] {
+        let vals = graph.get_weights(id).get_dense_vals().unwrap();
+
+        for x in vals {
+            let q = (x * 64.0).round() as i8;
+            assert_eq!((x * 64.0).round(), f32::from(q));
+            quant.extend_from_slice(&q.to_le_bytes());
+        }
+    }
+
+    for id in ["src1b", "dst1b"] {
+        let vals = graph.get_weights(id).get_dense_vals().unwrap();
+
+        for x in vals {
+            let q = (x * 255.0 * 64.0).round() as i16;
+            assert_eq!((x * 255.0 * 64.0).round(), f32::from(q));
+            quant.extend_from_slice(&q.to_le_bytes());
+        }
+    }
+
+    file.write_all(&quant)
+}
