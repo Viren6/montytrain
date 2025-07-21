@@ -52,11 +52,8 @@ pub fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
                     let input_offset = MAX_ACTIVE_BASE * i;
                     let moves_offset = MAX_MOVES * i;
 
-                    let threats = point.pos.threats_by(point.pos.stm() ^ 1);
-                    let defences = point.pos.threats_by(point.pos.stm());
-
                     let mut j = 0;
-                    inputs::map_base_inputs(&point.pos, threats, defences, |feat| {
+                    inputs::map_base_inputs(&point.pos, |feat| {
                         assert!(feat < INPUT_SIZE);
                         input_chunk[input_offset + j] = feat as i32;
                         j += 1;
@@ -77,9 +74,7 @@ pub fn prepare(data: &[DecompressedData], threads: usize) -> PreparedBatchHost {
                         total += visits;
 
                         let mov = Move::from(mov);
-                        let dst_idx = inputs::map_sq(pos, mov.to()) + 64 * i32::from(inputs::see(pos, &mov, -108));
-                        let index = 64 * dst_idx + inputs::map_sq(pos, mov.src());
-                        moves_chunk[moves_offset + distinct] = index;
+                        moves_chunk[moves_offset + distinct] = inputs::map_move_to_index(pos, mov);
                         dist_chunk[moves_offset + distinct] = f32::from(visits);
                         distinct += 1;
                     }

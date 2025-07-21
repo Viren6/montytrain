@@ -4,16 +4,24 @@ pub const MAX_MOVES: usize = 64;
 pub const INPUT_SIZE: usize = 768 * 4;
 pub const MAX_ACTIVE_BASE: usize = 32;
 
-pub fn map_sq(pos: &Position, sq: u16) -> i32 {
+pub fn map_move_to_index(pos: &Position, mov: Move) -> i32 {
+    let dst_idx = map_sq(pos, mov.to()) + 64 * i32::from(see(pos, mov, -108));
+    64 * dst_idx + map_sq(pos, mov.src())
+}
+
+fn map_sq(pos: &Position, sq: u16) -> i32 {
     let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
     let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
     i32::from(sq ^ vert ^ hori)
 }
 
-pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, threats: u64, defences: u64, mut f: F) {
+pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
     let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
     let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
     let flip = vert ^ hori;
+
+    let threats = pos.threats_by(pos.stm() ^ 1);
+    let defences = pos.threats_by(pos.stm());
 
     for piece in Piece::PAWN..=Piece::KING {
         let pc = 64 * (piece - 2);
@@ -61,7 +69,7 @@ pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, threats: u64, defences: 
 
 const SEE_VALS: [i32; 8] = [0, 0, 100, 450, 450, 650, 1250, 0];
 
-fn gain(pos: &Position, mov: &Move) -> i32 {
+fn gain(pos: &Position, mov: Move) -> i32 {
     if mov.is_en_passant() {
         return SEE_VALS[Piece::PAWN];
     }
@@ -72,7 +80,7 @@ fn gain(pos: &Position, mov: &Move) -> i32 {
     score
 }
 
-pub fn see(pos: &Position, mov: &Move, threshold: i32) -> bool {
+fn see(pos: &Position, mov: Move, threshold: i32) -> bool {
     let sq = usize::from(mov.to());
     assert!(sq < 64, "wha");
     let mut next = if mov.is_promo() { mov.promo_pc() } else { pos.get_pc(1 << mov.src()) };
