@@ -24,8 +24,8 @@ pub fn make(device: CudaDevice, hl: usize, dim: usize) -> (Graph<CudaDevice>, No
 
     let subnets = |name: &str, num| {
         let l0 = builder.new_affine(&format!("{name}0"), INPUT_SIZE, hl);
-        let l1 = builder.new_affine(&format!("{name}1"), hl, num * dim);
-        let hl = l0.forward(inputs).screlu();
+        let l1 = builder.new_affine(&format!("{name}1"), hl / 2, num * dim);
+        let hl = l0.forward(inputs).crelu().pairwise_mul();
         l1.forward(hl).reshape(Shape::new(dim, num))
     };
 

@@ -4,10 +4,7 @@ pub mod model;
 
 use bullet_core::{
     device::Device,
-    optimiser::{
-        adam::{AdamW, AdamWParams},
-        Optimiser,
-    },
+    optimiser::{adam::AdamW, Optimiser},
     trainer::{
         schedule::{TrainingSchedule, TrainingSteps},
         Trainer,
@@ -20,21 +17,20 @@ use crate::data::MontyDataLoader;
 fn main() {
     let device = CudaDevice::new(0).unwrap();
 
-    let (graph, node) = model::make(device, 1024, 32);
+    let (graph, node) = model::make(device, 2048, 32);
 
-    let params = AdamWParams { min_weight: -0.99, max_weight: 0.99, ..Default::default() };
-    let optimiser = Optimiser::<_, AdamW<_>>::new(graph, params).unwrap();
+    let optimiser = Optimiser::<_, AdamW<_>>::new(graph, Default::default()).unwrap();
 
     let mut trainer = Trainer { optimiser, state: () };
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
     let save_rate = 30;
-    let end_superbatch = 1;
+    let end_superbatch = 600;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
-    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 512, start_superbatch: 1, end_superbatch };
+    let steps = TrainingSteps { batch_size: 16384, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch };
 
     let schedule = TrainingSchedule {
         steps,
