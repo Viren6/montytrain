@@ -31,7 +31,7 @@ pub fn make(device: CudaDevice, hl: usize, dim: usize) -> (Graph<CudaDevice>, No
 
     let attn = subnets("src", 64).gemm(true, subnets("dst", 128), false);
 
-    let logits = builder.apply(grab::Grab { input: attn.annotated_node(), indices: moves.annotated_node() });
+    let logits = builder.apply(grab::Grab::new(attn, moves));
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let loss = logits.softmax_crossentropy_loss(targets);

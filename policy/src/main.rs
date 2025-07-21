@@ -30,7 +30,7 @@ fn main() {
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
     let save_rate = 30;
-    let end_superbatch = 240;
+    let end_superbatch = 600;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
@@ -39,14 +39,13 @@ fn main() {
     let schedule = TrainingSchedule {
         steps,
         log_rate: 64,
-        lr_schedule: Box::new(|_, superbatch| {
-            if superbatch >= end_superbatch {
+        lr_schedule: Box::new(|_, sb| {
+            if sb >= end_superbatch {
                 return final_lr;
             }
 
-            let progress = superbatch as f32 / end_superbatch as f32;
-            let lambda = 1.0 - 0.5 * (1.0 + (std::f32::consts::PI * progress).cos());
-            initial_lr + lambda * (final_lr - initial_lr)
+            let lambda = sb as f32 / end_superbatch as f32;
+            initial_lr * (final_lr / initial_lr).powf(lambda)
         }),
     };
 

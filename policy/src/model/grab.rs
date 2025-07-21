@@ -1,7 +1,7 @@
 use bullet_core::{
     device::OperationError,
     graph::{
-        builder::Shape,
+        builder::{GraphBuilderNode, Shape},
         instruction::{GraphInstruction, MaybeUpdateBatchSize},
         ir::{
             node::AnnotatedNode,
@@ -18,8 +18,14 @@ use crate::inputs::MAX_MOVES;
 
 #[derive(Debug)]
 pub struct Grab {
-    pub input: AnnotatedNode,
-    pub indices: AnnotatedNode,
+    input: AnnotatedNode,
+    indices: AnnotatedNode,
+}
+
+impl Grab {
+    pub fn new<'a>(input: GraphBuilderNode<'a, CudaMarker>, indices: GraphBuilderNode<'a, CudaMarker>) -> Self {
+        Self { input: input.annotated_node(), indices: indices.annotated_node() }
+    }
 }
 
 impl<B: BackendMarker> GraphIROperation<B> for Grab {
@@ -67,10 +73,10 @@ impl GraphIROperationCompilable<CudaMarker> for Grab {
 }
 
 #[derive(Debug)]
-pub struct GrabFwd {
-    pub input: NodeId,
-    pub indices: NodeId,
-    pub output: NodeId,
+struct GrabFwd {
+    input: NodeId,
+    indices: NodeId,
+    output: NodeId,
 }
 
 impl GraphInstruction<CudaDevice> for GrabFwd {
@@ -124,10 +130,10 @@ impl GraphInstruction<CudaDevice> for GrabFwd {
 }
 
 #[derive(Debug)]
-pub struct GrabBwd {
-    pub input_grad: NodeId,
-    pub indices: NodeId,
-    pub output_grad: NodeId,
+struct GrabBwd {
+    input_grad: NodeId,
+    indices: NodeId,
+    output_grad: NodeId,
 }
 
 impl GraphInstruction<CudaDevice> for GrabBwd {
