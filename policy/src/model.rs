@@ -22,15 +22,14 @@ pub fn make(device: CudaDevice, hl: usize, dim: usize) -> (Graph<CudaDevice>, No
     let targets = builder.new_dense_input("targets", Shape::new(MAX_MOVES, 1));
     let moves = builder.new_sparse_input("moves", Shape::new(64, 128), MAX_MOVES);
 
-    let src0 = builder.new_affine("src0", INPUT_SIZE, hl);
-    let src1 = builder.new_affine("src1", hl, 64 * dim);
-    let src_embed = src1.forward(src0.forward(inputs).screlu()).reshape(Shape::new(dim, 64));
+    let subnets = |name: &str, num| {
+        let l0 = builder.new_affine(&format!("{name}0"), INPUT_SIZE, hl);
+        let l1 = builder.new_affine(&format!("{name}1"), hl, num * dim);
+        let hl = l0.forward(inputs).screlu();
+        l1.forward(hl).reshape(Shape::new(dim, num))
+    };
 
-    let dst0 = builder.new_affine("dst0", INPUT_SIZE, hl);
-    let dst1 = builder.new_affine("dst1", hl, 128 * dim);
-    let dst_embed = dst1.forward(dst0.forward(inputs).screlu()).reshape(Shape::new(dim, 128));
-
-    let attn = src_embed.gemm(true, dst_embed, false);
+    let attn = subnets("src", 64).gemm(true, subnets("dst", 128), false);
 
     let logits = builder.apply(grab::Grab { input: attn.annotated_node(), indices: moves.annotated_node() });
 

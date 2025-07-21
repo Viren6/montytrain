@@ -29,22 +29,24 @@ fn main() {
 
     let dataloader = MontyDataLoader::new("data/policygen6.binpack", 1024, 4);
 
-    let end_superbatch = 1;
+    let save_rate = 30;
+    let end_superbatch = 240;
     let initial_lr = 0.001;
     let final_lr = 0.00001;
 
-    let steps = TrainingSteps { batch_size: 4096, batches_per_superbatch: 512, start_superbatch: 1, end_superbatch };
+    let steps = TrainingSteps { batch_size: 16384, batches_per_superbatch: 6104, start_superbatch: 1, end_superbatch };
 
     let schedule = TrainingSchedule {
         steps,
         log_rate: 64,
-        lr_schedule: Box::new(|_, sb| {
-            if sb >= end_superbatch {
+        lr_schedule: Box::new(|_, superbatch| {
+            if superbatch >= end_superbatch {
                 return final_lr;
             }
 
-            let lambda = sb as f32 / end_superbatch as f32;
-            initial_lr * (final_lr / initial_lr).powf(lambda)
+            let progress = superbatch as f32 / end_superbatch as f32;
+            let lambda = 1.0 - 0.5 * (1.0 + (std::f32::consts::PI * progress).cos());
+            initial_lr + lambda * (final_lr - initial_lr)
         }),
     };
 
@@ -54,7 +56,7 @@ fn main() {
             dataloader,
             |_, _, _, _| {},
             |trainer, superbatch| {
-                if superbatch % 10 == 0 || superbatch == steps.end_superbatch {
+                if superbatch % save_rate == 0 || superbatch == steps.end_superbatch {
                     println!("Saving Checkpoint");
                     let dir = format!("checkpoints/policy-{superbatch}");
                     let _ = std::fs::create_dir(&dir);
