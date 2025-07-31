@@ -9,7 +9,6 @@ extern "C" __global__ void kernel(
     float* weights_grad,
     float* biases_grad
 ) {
-    extern __shared__ float sdata[];
 
     const int loc_in_batch = blockIdx.y;
     const int loc_in_moves = blockIdx.x;
@@ -31,31 +30,17 @@ extern "C" __global__ void kernel(
             const float4 ti = tI[idx];
             const float4 tw = tW[idx];
 
-            sdata[4 * tid    ] = ti.x;
-            sdata[4 * tid + 1] = ti.y;
-            sdata[4 * tid + 2] = ti.z;
-            sdata[4 * tid + 3] = ti.w;
-            __syncthreads();
+            int wg_base = in_size * move + idx * 4;
+            atomicAdd(weights_grad + wg_base    , grd * ti.x);
+            atomicAdd(weights_grad + wg_base + 1, grd * ti.y);
+            atomicAdd(weights_grad + wg_base + 2, grd * ti.z);
+            atomicAdd(weights_grad + wg_base + 3, grd * ti.w);
 
-            float* tWg = weights_grad + in_size * move + idx;
-            atomicAdd(tWg                 , grd * sdata[tid                 ]);
-            atomicAdd(tWg + blockDim.x    , grd * sdata[tid + blockDim.x    ]);
-            atomicAdd(tWg + blockDim.x * 2, grd * sdata[tid + blockDim.x * 2]);
-            atomicAdd(tWg + blockDim.x * 3, grd * sdata[tid + blockDim.x * 3]);
-            __syncthreads();
-
-            sdata[4 * tid    ] = tw.x;
-            sdata[4 * tid + 1] = tw.y;
-            sdata[4 * tid + 2] = tw.z;
-            sdata[4 * tid + 3] = tw.w;
-            __syncthreads();
-
-            float* tIg = input_grad + in_size * loc_in_batch + idx;
-            atomicAdd(tIg                 , grd * sdata[tid                 ]);
-            atomicAdd(tIg + blockDim.x    , grd * sdata[tid + blockDim.x    ]);
-            atomicAdd(tIg + blockDim.x * 2, grd * sdata[tid + blockDim.x * 2]);
-            atomicAdd(tIg + blockDim.x * 3, grd * sdata[tid + blockDim.x * 3]);
-            __syncthreads();
+            int ig_base = in_size * loc_in_batch + idx * 4;
+            atomicAdd(input_grad + ig_base    , grd * tw.x);
+            atomicAdd(input_grad + ig_base + 1, grd * tw.y);
+            atomicAdd(input_grad + ig_base + 2, grd * tw.z);
+            atomicAdd(input_grad + ig_base + 3, grd * tw.w);		
         }
     }
 }
