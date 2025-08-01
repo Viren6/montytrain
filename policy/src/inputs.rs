@@ -1,4 +1,4 @@
-use montyformat::chess::{Attacks, Flag, Move, Piece, Position, Side};
+use montyformat::chess::{Castling, Flag, Move, Piece, Position, Side};
 
 pub const MAX_MOVES: usize = 64;
 pub const INPUT_SIZE: usize = 768 * 4;
@@ -92,77 +92,62 @@ pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
 
 const SEE_VALS: [i32; 8] = [0, 0, 100, 450, 450, 650, 1250, 0];
 
-fn gain(pos: &Position, mov: Move) -> i32 {
-    if mov.is_en_passant() {
-        return SEE_VALS[Piece::PAWN];
+fn see_rec(board: Position, to: u16, castling: &Castling) -> i32 {
+    let mut moves = Vec::new();
+    board.map_legal_captures(castling, |mv| {
+        if mv.to() == to || mv.is_en_passant() {
+            moves.push(mv);
+        }
+    });
+
+    if moves.is_empty() {
+        return 0;
     }
-    let mut score = SEE_VALS[pos.get_pc(1 << mov.to())];
+
+    let mut best = i32::MIN;
+
+    for mv in moves {
+        let captured = if mv.is_en_passant() { Piece::PAWN } else { board.get_pc(1 << to) };
+
+        let mut tmp = board;
+        tmp.make(mv, castling);
+
+        let mut gain = SEE_VALS[captured];
+        if mv.is_promo() {
+            gain += SEE_VALS[mv.promo_pc()] - SEE_VALS[Piece::PAWN];
+        }
+
+        let score = gain - see_rec(tmp, to, castling);
+        if score > best {
+            best = score;
+        }
+    }
+
+    if best < 0 {
+        0
+    } else {
+        best
+    }
+}
+
+fn see_score(pos: &Position, mov: Move) -> i32 {
+    let castling = Castling::from_raw(pos, [[0; 2]; 2]);
+
+    let captured = if mov.is_en_passant() { Piece::PAWN } else { pos.get_pc(1 << mov.to()) };
+
+    let mut gain = SEE_VALS[captured];
     if mov.is_promo() {
-        score += SEE_VALS[mov.promo_pc()] - SEE_VALS[Piece::PAWN];
+        gain += SEE_VALS[mov.promo_pc()] - SEE_VALS[Piece::PAWN];
     }
-    score
+
+    let mut board = *pos;
+    board.make(mov, &castling);
+
+    gain - see_rec(board, mov.to(), &castling)
 }
 
 fn see(pos: &Position, mov: Move, threshold: i32) -> bool {
-    let sq = usize::from(mov.to());
-    assert!(sq < 64, "wha");
-    let mut next = if mov.is_promo() { mov.promo_pc() } else { pos.get_pc(1 << mov.src()) };
-    let mut score = gain(pos, mov) - threshold - SEE_VALS[next];
-
-    if score >= 0 {
-        return true;
-    }
-
-    let mut occ = (pos.piece(Side::WHITE) | pos.piece(Side::BLACK)) ^ (1 << mov.src()) ^ (1 << sq);
-    if mov.is_en_passant() {
-        occ ^= 1 << (sq ^ 8);
-    }
-
-    let bishops = pos.piece(Piece::BISHOP) | pos.piece(Piece::QUEEN);
-    let rooks = pos.piece(Piece::ROOK) | pos.piece(Piece::QUEEN);
-    let mut us = pos.stm() ^ 1;
-    let mut attackers = (Attacks::knight(sq) & pos.piece(Piece::KNIGHT))
-        | (Attacks::king(sq) & pos.piece(Piece::KING))
-        | (Attacks::pawn(sq, Side::WHITE) & pos.piece(Piece::PAWN) & pos.piece(Side::BLACK))
-        | (Attacks::pawn(sq, Side::BLACK) & pos.piece(Piece::PAWN) & pos.piece(Side::WHITE))
-        | (Attacks::rook(sq, occ) & rooks)
-        | (Attacks::bishop(sq, occ) & bishops);
-
-    loop {
-        let our_attackers = attackers & pos.piece(us);
-        if our_attackers == 0 {
-            break;
-        }
-
-        for pc in Piece::PAWN..=Piece::KING {
-            let board = our_attackers & pos.piece(pc);
-            if board > 0 {
-                occ ^= board & board.wrapping_neg();
-                next = pc;
-                break;
-            }
-        }
-
-        if [Piece::PAWN, Piece::BISHOP, Piece::QUEEN].contains(&next) {
-            attackers |= Attacks::bishop(sq, occ) & bishops;
-        }
-        if [Piece::ROOK, Piece::QUEEN].contains(&next) {
-            attackers |= Attacks::rook(sq, occ) & rooks;
-        }
-
-        attackers &= occ;
-        score = -score - 1 - SEE_VALS[next];
-        us ^= 1;
-
-        if score >= 0 {
-            if next == Piece::KING && attackers & pos.piece(us) > 0 {
-                us ^= 1;
-            }
-            break;
-        }
-    }
-
-    pos.stm() != us
+    see_score(pos, mov) >= threshold
 }
 
 pub const PROMOS: usize = 4 * 22;
