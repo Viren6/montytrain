@@ -1,7 +1,7 @@
 use montyformat::chess::{Attacks, Move, Piece, Position, Side};
 
 pub const MAX_MOVES: usize = 64;
-pub const INPUT_SIZE: usize = 768 * 4;
+pub const INPUT_SIZE: usize = 768;
 pub const MAX_ACTIVE_BASE: usize = 32;
 pub const NUM_MOVES_INDICES: usize = (OFFSETS[64] + PROMOS);
 
@@ -28,12 +28,8 @@ pub fn map_move_to_index(pos: &Position, mov: Move) -> usize {
 }
 
 pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
-    let vert = if pos.stm() == Side::BLACK { 56 } else { 0 };
-    let hori = if pos.king_index() % 8 > 3 { 7 } else { 0 };
-    let flip = vert ^ hori;
-
-    let threats = pos.threats_by(pos.stm() ^ 1);
-    let defences = pos.threats_by(pos.stm());
+    let flip = pos.stm() == Side::BLACK;
+    let hm = if pos.king_index() % 8 > 3 { 7 } else { 0 };
 
     for piece in Piece::PAWN..=Piece::KING {
         let pc = 64 * (piece - 2);
@@ -41,39 +37,22 @@ pub fn map_base_inputs<F: FnMut(usize)>(pos: &Position, mut f: F) {
         let mut our_bb = pos.piece(piece) & pos.piece(pos.stm());
         let mut opp_bb = pos.piece(piece) & pos.piece(pos.stm() ^ 1);
 
+        if flip {
+            our_bb = our_bb.swap_bytes();
+            opp_bb = opp_bb.swap_bytes();
+        }
+
         while our_bb > 0 {
-            let sq = our_bb.trailing_zeros() as usize;
-            let mut feat = pc + (sq ^ flip);
-
-            let bit = 1 << sq;
-            if threats & bit > 0 {
-                feat += 768;
-            }
-
-            if defences & bit > 0 {
-                feat += 768 * 2;
-            }
-
+            let sq = our_bb.trailing_zeros();
+            let feat = pc + (sq ^ hm) as usize;
             f(feat);
-
             our_bb &= our_bb - 1;
         }
 
         while opp_bb > 0 {
-            let sq = opp_bb.trailing_zeros() as usize;
-            let mut feat = 384 + pc + (sq ^ flip);
-
-            let bit = 1 << sq;
-            if threats & bit > 0 {
-                feat += 768;
-            }
-
-            if defences & bit > 0 {
-                feat += 768 * 2;
-            }
-
+            let sq = opp_bb.trailing_zeros();
+            let feat = 384 + pc + (sq ^ hm) as usize;
             f(feat);
-
             opp_bb &= opp_bb - 1;
         }
     }
