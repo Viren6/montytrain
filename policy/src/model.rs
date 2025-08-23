@@ -1,4 +1,5 @@
 mod select_affine;
+mod select_sparse_affine;
 
 use bullet_core::{
     graph::{
@@ -24,10 +25,12 @@ pub fn make(device: CudaDevice, hl: usize) -> (Graph<CudaDevice>, NodeId) {
 
     let l0 = builder.new_affine("l0", INPUT_SIZE, hl);
     let l1 = builder.new_affine("l1", hl / 2, NUM_MOVES_INDICES);
+    let l2 = builder.new_affine("l2", NUM_MOVES_INDICES, NUM_MOVES_INDICES);
 
     let hl = l0.forward(inputs).crelu().pairwise_mul();
 
-    let logits = builder.apply(select_affine::SelectAffine::new(l1, hl, moves));
+    let hidden = builder.apply(select_affine::SelectAffine::new(l1, hl, moves));
+    let logits = builder.apply(select_sparse_affine::SelectSparseAffine::new(l2, hidden, moves));
 
     let ones = builder.new_constant(Shape::new(1, MAX_MOVES), &[1.0; MAX_MOVES]);
     let loss = logits.softmax_crossentropy_loss(targets);
@@ -75,7 +78,7 @@ pub fn save_quantised(graph: &Graph<CudaDevice>, path: &str) -> std::io::Result<
 
     let mut quant = Vec::new();
 
-    for id in ["l0w", "l0b", "l1w", "l1b"] {
+    for id in ["l0w", "l0b", "l1w", "l1b", "l2w", "l2b"] {
         let vals = graph.get_weights(id).get_dense_vals().unwrap();
 
         for x in vals {
